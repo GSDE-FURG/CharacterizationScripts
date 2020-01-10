@@ -1,4 +1,4 @@
-/scripts/sol.*
+sol.*
 /scripts/exported_luts
 /scripts/*.txt
 *.lib
