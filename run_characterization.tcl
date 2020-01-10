@@ -46,7 +46,7 @@ exec chmod 750 create_verilog_spef.tcl
 exec ./create_verilog_spef.tcl > verilog_spef_log.txt
 
 #Creates the .LUT files. Also creates a log that shows the run-time for each configuration.
-exec ./sta -no_splash create_lut.tcl > lut_log.txt
+exec ../OpenSTA/app/sta -no_splash create_lut.tcl > lut_log.txt
 
 #Ends the timer for the current computation.
 set finalTime [ expr ( [clock seconds] - $initialTime ) ]
