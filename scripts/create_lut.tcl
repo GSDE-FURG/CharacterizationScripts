@@ -32,18 +32,20 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+#Imports the configuration file and the functions file.
+source ../automaticInputs.tcl
+source ../manualInputs.tcl
+source functions_file.tcl
+
 #OpenSTA configurations.
 set sta_report_default_digits 6
 set sta_crpr_enabled 1
+#set_units -capacitance $capacitanceUnit -resistance $resistanceUnit -time $timeUnit -voltage V -current uA -power mw
 set power_default_signal_toggle_rate 2
 set sdc_version 2.0
 
-#Imports the configuration file and the functions file.
-source input_file.tcl
-source functions_file.tcl
-
 #Reads the liberty file (OpenSTA function).
-read_liberty $libpath
+read_liberty "$libpath"
 
 #Creates a folder where the new LUT files are placed.
 if {![file exists "exported_luts"]} {
@@ -73,9 +75,11 @@ foreach setupWirelength $wirelengthList {
 	#The number of possible topologies for a wirelength and characterization unit is 2^(wl/cu).
 	set numberOfTopologies [ expr 2 ** [expr $setupWirelength / $setupCharacterizationUnit ] ]
 
-	#VAriables creates to store each line of the resulting LUT file.
-	set outputData {}
-	set outputText ""
+	#Variables created to store each unique solution (combination of multiple variables) and to store the text data for the lut file. Their structure is as follows:
+	#outputTextData: a dict where key = solutionText (ex: 20,BUF_X2) and values = every line that has the same buffer topology.	
+	#uniqueSolutionList: a dict where key = unique solution key (combination of multiple variables) and value = the indexes for a specific line in outputTextData
+	set uniqueSolutionList {}
+	set outputTextData {}
 
 	#SolutionCounter defines what is the current topology when transformed in binary.
 	#For example, if numberOfTopologies is 4, there are 2 nodes where a buffer can be placed.
@@ -113,6 +117,8 @@ foreach setupWirelength $wirelengthList {
 			}
 			set solutionText [ string trim $solutionText "," ]
 
+			set lineIndex 0
+
 			#Iterates through each inputslew and load.
 			foreach currentLoad $loadList {
 				#Load = 0 is only used to create the spef files and to compute the wire power.
@@ -130,6 +136,7 @@ foreach setupWirelength $wirelengthList {
 					set_assigned_transition -rise $currentInputSlew $inPin
 					set_assigned_transition -fall $currentInputSlew $inPin
 					read_spef "sol_w${setupWirelength}u${setupCharacterizationUnit}/sol_w${setupWirelength}u${setupCharacterizationUnit}l${currentLoad}.spef"
+
 					#Computes the outputSlew for the current configuration, also tests if it is higher than a fixed value (2*maxSlew), and, if it is, it skips the current inputSLew value.
 					set currentOutputSlew [ computeOutputSlew $inPin $outPin $currentInputSlew ]
 					if { $currentOutputSlew > [ expr 2 * $maxSlew ] } { continue }
@@ -139,13 +146,37 @@ foreach setupWirelength $wirelengthList {
 					
 					#Computes the power for the current configuration. 
 					set currentPower [ computePower $solutionCounter $isPureWire $currentSolution $currentLoad $currentWirePower]
+
+					#Creates a key that represents the current solution. Composed of load, delay, wirelength, outputslew, inputslew and inputcap.
+					set solutionKey "$currentLoad-$currentDelay-$setupWirelength-$currentOutputSlew-$currentInputSlew-$currentInputCapacitance"
 					
-					#Appends the data for the current configuration in a dictionary. It consists of two keys: solutionText and currentInputSlew, and one value: the text data for the LUT file. If there already is a value for the current keys, the text data is appended to te current value.
-					if { [ dict exists $outputData $solutionText $currentInputSlew ] } {
-						dict set outputData $solutionText $currentInputSlew "[dict get $outputData $solutionText $currentInputSlew]$currentPower $currentLoad $currentDelay $setupWirelength $currentOutputSlew $currentInputSlew $currentInputCapacitance $solutionText\n"
+					#Checks if there is another configuration that had the same solutionKey. If there was, keep the one with lower power.
+					if { [ dict exists $uniqueSolutionList $solutionKey ] } {
+						#In order to obtain the previous power value, we first have to obtain the indexes from the uniqueSolutionList dict.
+						set valueIndex [ lindex [dict get $uniqueSolutionList $solutionKey] 1 ]
+						set solutionIndex [ lindex [dict get $uniqueSolutionList $solutionKey] 0 ]
+						#Gets the line for the previous computation.
+						set currentValue [ lindex [dict get $outputTextData $solutionIndex] $valueIndex ]
+						set previousPower [ lindex $currentValue 0 ]
+						if { $previousPower > $currentPower } {
+							#If the current power value is lower the the previous one, we need to eplace the old values with the information for the current line.
+							dict replace uniqueSolutionList $solutionKey "$solutionText $lineIndex"
+							#Also, we have to empty the information of the last line. Erasing it would mess up the references for the lineIndex.
+							lset [dict get $outputTextData $solutionIndex ] $valueIndex ""
+							#Updates outputTextData with the new line. Also increments the lineIndex.
+							dict lappend outputTextData $solutionText "$currentPower $currentLoad $currentDelay $setupWirelength $currentOutputSlew $currentInputSlew $currentInputCapacitance $solutionText "
+							incr lineIndex
+						}
 					} else {
-						dict set outputData $solutionText $currentInputSlew "$currentPower $currentLoad $currentDelay $setupWirelength $currentOutputSlew $currentInputSlew $currentInputCapacitance $solutionText\n"
+						#If there is no value for the current key, create one: a list that consists of the solutionText and the index of the line for the current buffer topology.
+						dict set uniqueSolutionList $solutionKey "$solutionText $lineIndex"
+						#Updates outputTextData with the new line. Also increments the lineIndex.
+						dict lappend outputTextData $solutionText "$currentPower $currentLoad $currentDelay $setupWirelength $currentOutputSlew $currentInputSlew $currentInputCapacitance $solutionText "
+						incr lineIndex
+						
 					}
+					
+					
 				}
 			}
 
@@ -159,13 +190,27 @@ foreach setupWirelength $wirelengthList {
 	}
 	#Opens the new LUT file.
 	set lutFile [ open "exported_luts/${setupWirelength}.lut" w ]
-	#Iterates through all solutions and inputSlews. Then, appends the text data to a new variable. 
-	dict for {solutionKey slewTextDict} $outputData {
-		foreach {slewKey textData} $slewTextDict {
-			append outputText "${textData}"
-		}
+	#Creates two new variables to store the text data. outputList will store the data in a list, in order to sort it based on the inputSlew. outputText will store the raw text data. 
+	set outputText ""
+	set outputList ""
+	foreach {solution lines} $outputTextData {
+			#Creates the list with each line for the current solution.
+			foreach lineData $lines {
+				append outputList $lineData
+			}
+			#Groups the values by 8 (-stride) and sort them based on the 5th value (inputSlew).
+			set outputList [ lsort -stride 8 -index 5 $outputList ]
+			#For each one of the 8 values, define a name for each of them and add them to outputText variable.
+			foreach {currentPower currentLoad currentDelay setupWirelength currentOutputSlew currentInputSlew currentInputCapacitance solutionText} $outputList {
+				append outputText "$currentPower $currentLoad $currentDelay $setupWirelength $currentOutputSlew $currentInputSlew $currentInputCapacitance $solutionText\n"
+			}
+			
+			#Empty outputList for the next solution.
+			set outputList ""
 	}
-	#Exports the text data to the LUT file then closes it.
+
+	#Exports the text data to the LUT file then closes it. Also removes any leading "\n".
+	set outputText [ string trimright $outputText "\n" ]
 	puts $lutFile $outputText
 	close $lutFile
 

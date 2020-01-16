@@ -33,7 +33,8 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #Imports the configuration file and the functions file (required for dec2bin).
-source input_file.tcl
+source ../automaticInputs.tcl
+source ../manualInputs.tcl
 source functions_file.tcl
 
 #Indexes for net Data. It is used when obtaining information from the net with lindex. Helps a bit with readability.

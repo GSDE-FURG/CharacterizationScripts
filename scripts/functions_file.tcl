@@ -110,9 +110,9 @@ proc get_power {inst_nm type} {
 		return [lindex $pwr_list 2]
 	} elseif {$type == "total"} {
 		return [lindex $pwr_list 3]
-	}	
-
- 	
+	} elseif {$type == "sum"} {
+		return [expr [lindex $pwr_list 0] + [lindex $pwr_list 1] + [lindex $pwr_list 2] ]
+	}
 }
 
 proc computeOutputSlew {inPin outPin currentInputSlew} {
@@ -196,7 +196,7 @@ proc computePower {solutionCounter isPureWire currentSolution currentLoad curren
 	if { $isPureWire != 1 } {
 		foreach instance $currentSolution {
 			if { [ string is integer $instance ] == 0 } {
-				set totalPower [ get_power "buf_${solutionCounter}_${buffCounter}" total ]
+				set totalPower [ get_power "buf_${solutionCounter}_${buffCounter}" sum ]
 				set totPower [ expr $totPower + $totalPower ]				
 				incr buffCounter
 			}

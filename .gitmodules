@@ -1,3 +1,6 @@
 [submodule "OpenSTA"]
 	path = OpenSTA
 	url = https://github.com/The-OpenROAD-Project/OpenSTA
+[submodule "OpenDB"]
+	path = OpenDB
+	url = https://github.com/The-OpenROAD-Project/OpenDB

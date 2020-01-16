@@ -36,19 +36,29 @@
 puts "Starting characterization..."
 set initialTime [clock seconds]	
 
-cd scripts
-
 #Gives permissions to the tcl scripts.
-exec chmod 750 create_lut.tcl
-exec chmod 750 create_verilog_spef.tcl
+exec chmod 750 scripts/create_lut.tcl
+exec chmod 750 scripts/create_verilog_spef.tcl
+exec chmod 750 scripts/lut_post_processing.tcl
+exec chmod 750 inputGeneration/run_all.tcl
+
+cd inputGeneration
+
+#Computes the automatic inputs.
+exec ./run_all.tcl 
 	
+cd ../scripts
+
 #Generates verilog and spef files for a given wirelength and characterization unit. Also creates a log that shows the run-time for each configuration.
 exec ./create_verilog_spef.tcl > verilog_spef_log.txt
 
 #Creates the .LUT files. Also creates a log that shows the run-time for each configuration.
 exec ../OpenSTA/app/sta -no_splash create_lut.tcl > lut_log.txt
 
-#Ends the timer for the current computation.
+#Post-processing of the lut file.
+exec ./lut_post_processing.tcl > lut_post_processing_log.txt
+
+#Ends the timer for the current computation. 
 set finalTime [ expr ( [clock seconds] - $initialTime ) ]
 puts "End of characterization. Runtime = $finalTime seconds."
 

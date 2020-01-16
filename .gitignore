@@ -3,3 +3,6 @@
 /scripts/exported_luts
 /scripts/*.txt
 *.lib
+*.txt
+*.lef
+automaticInputs.tcl
