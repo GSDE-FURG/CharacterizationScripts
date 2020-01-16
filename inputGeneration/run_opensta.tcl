@@ -43,35 +43,40 @@ read_verilog "../$verilog"
 link_design top
 
 
-proc get_pincapmax {pin_nm} { #pin_nm is the name of an instance in verilog description and the respective node. ex: BUF_X1/A
-	
+proc get_pincapmax {pin_nm} {
+	#Uses OpenSTA to generate a report on the pin capacitance. It results in one line that can be in a few different formats depending on the liberty file.
 	report_pin $pin_nm > pin.rpt
-	set pin_rpt [open "./pin.rpt" r]
+	set pin_rpt	[open "./pin.rpt" r]
 	set line [read $pin_rpt]
-	if { [ string is integer -strict [lindex $line 3] ] } {
+
+	#One format is when there is only one capacitance in the liberty file, thus, the 3rd word in the pin report will be a number.
+	if { [ string is double -strict [lindex $line 3] ] } {	
 		set pinCap [lindex $line 3]
-
-		close $pin_rpt
-		file delete pin.rpt
-
-		return $pinCap
+	} elseif {[string first ":" [lindex $line 3] ] != -1} {	
+		#However, that word could be an interval (string contains ":"). If so, we have to get the upper limit of the pin capacitance.
+		set pinCap [lindex [split [lindex $line 3] ":"] 1]
 	} else {
+		#Another format is when there is a fall capacitance and a rise capacitance. In this case, we will return the higher one of the two.
 		set r_cap [lindex $line 4]
 		set f_cap [lindex $line 6]
-
-		close $pin_rpt
-		file delete pin.rpt
-		
-
-		
-
-		if {$r_cap > $f_cap} {
-			return $r_cap
-		} else {
-			return $f_cap
+		if {[string first ":" $r_cap ] != -1} {	
+			#These values can also can be an interval (string contains ":"). 
+			set r_cap [lindex [split $r_cap ":"] 1]
+   			set f_cap [lindex [split $f_cap ":"] 1]
 		}
 		
+		if {$r_cap > $f_cap} {
+			set pinCap $r_cap
+		} else {
+			set pinCap $f_cap
+		}
 	}
+
+	#Closes and deletes the pin report file and returns the pin capacitance.
+	close $pin_rpt
+	file delete pin.rpt
+
+	return $pinCap
 }
 
 

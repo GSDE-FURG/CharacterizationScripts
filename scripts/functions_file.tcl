@@ -62,7 +62,7 @@ proc get_pincapmax {pin_nm} {
 		set r_cap [lindex $line 4]
 		set f_cap [lindex $line 6]
 
-		if {[string first ":" r_cap ] != -1} {	
+		if {[string first ":" $r_cap ] != -1} {	
 			#These values can also can be an interval (string contains ":"). 
 			set r_cap [lindex [split $r_cap ":"] 1]
    			set f_cap [lindex [split $f_cap ":"] 1]
