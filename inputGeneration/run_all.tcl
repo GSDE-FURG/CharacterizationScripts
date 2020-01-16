@@ -34,13 +34,13 @@
 
 source ../manualInputs.tcl
 
-exec ../OpenDB/build/src/swig/tcl/opendbtcl run_opendb.tcl 2> erro.txt
-#puts "finished OPENDB"
+#Gets data from OpenDB
+exec ../OpenDB/build/src/swig/tcl/opendbtcl run_opendb.tcl 2> opendb_log.txt
 
-exec ../OpenSTA/app/sta run_opensta.tcl 2> erro2.txt
+#Gets data from OpenSTA
+exec ../OpenSTA/app/sta run_opensta.tcl 2> opensta_log.txt
 
-#puts "finished OPENSTA"
-
+#Opens the OpenDB report.
 set fdb	[open "./outdb.txt" r]
 	
 gets $fdb line1
@@ -48,9 +48,11 @@ gets $fdb line1
 close $fdb
 file delete $fdb
 
+#Gets buffer and flip-flop names.
 set name_outpin_buf [lindex $line1 5]
 set name_outpin_ff [lindex $line1 6]
 
+#Opens the OpenSTA report.
 set fsta	[open "./outsta.txt" r]
 	
 gets $fsta line2
@@ -61,6 +63,7 @@ gets $fsta line5
 
 close $fsta
 
+#Gets multiple values (capacitance per unit length, resistance per unit length, pin capacitances...).
 puts "c_sqr r_sqr inPin_buf, pin1_ff pin2_ff"
 set lefcappsqr [lindex $line1 0]
 set lefrespsqr [lindex $line1 1]
@@ -69,27 +72,30 @@ append exportText "set ffPinD [lindex $line1 3]\n"
 append exportText "set ffPinClk [lindex $line1 4]\n"
 append exportText "set bufPinOut [lindex $line1 5]\n"
 append exportText "set ffPinQ [lindex $line1 6]\n"
-#...
 puts $line1
 puts "capacitance values"
 append exportText "set bufName [lindex $line2 0]\n"
 append exportText "set bufPinInCapacitance [lindex $line3 0]\n"
 puts $line2
 puts $line3
-#ff names
 puts $line4
+#Gets flip-flop name and pin capacitances.
 append exportText "set ffName [string trimright [lindex $line4 0] /[lindex $line1 3]]\n"
 append exportText "set ffPinDCapacitance [lindex $line5 0]\n"
 append exportText "set ffPinClkCapacitance [lindex $line5 1]\n"
-#ff pinD pinCK
 puts $line5
 
 file delete $fsta
+
+#Opens the liberty file in order to obtain the units.
 set libfile [ open "$libpath" ]
+#Boolean flags that check if we have found all the units we need.
 set resistanceUnitFlag 0
 set capacitanceUnitFlag 0
 set timeUnitFlag 0
+#For each line of the liberty file...
 while {[gets $libfile libLine] >= 0} {
+	#Check if a substring is present on the line. If yes, splits the line and obtains the unit.
 	if {[string first "pulling_resistance_unit" $libLine ] != -1} {
 		set resistanceString [ split $libLine "\"" ]
 		set resistanceUnit [string toupper [string range [lindex $resistanceString 1 ] 1 end]]
@@ -108,6 +114,7 @@ while {[gets $libfile libLine] >= 0} {
 	}
 }
 
+#Sets the base unit as ns. If a value is ps, set a multiplier as 1000.
 append exportText "set timeUnit ${timeUnit}\n"
 if { $timeUnit == "PS" } {
 	append exportText "set time_unit 1000\n"
@@ -119,6 +126,7 @@ if { $timeUnit == "PS" } {
 	puts "Unsupported time unit (not NS or PS)."
 }
 
+#Sets the base unit as pf. If a value is ff, set a multiplier as 1000. Also updates the capacitance per unit length value if needed, since it is fixed on pf.
 append exportText "set capacitanceUnit ${capacitanceUnit}\n"
 if { $capacitanceUnit == "FF" } {
 	append exportText "set cap_unit 1000\n"
@@ -132,6 +140,7 @@ if { $capacitanceUnit == "FF" } {
 	puts "Unsupported capacitance unit (not PF or FF)."
 }
 
+#Sets the base unit as ohm. Updates the resistance per unit length if needed, since it is fixed on ohm.
 append exportText "set resistanceUnit ${resistanceUnit}\n"
 if { $resistanceUnit == "KOHM" } {
 	append exportText "set resistancePerUnitLength [expr ( $lefrespsqr / 1000 )]\n"
@@ -141,9 +150,7 @@ if { $resistanceUnit == "KOHM" } {
 	puts "Unsupported resistance unit (not KOHM or OHM)."
 }
 
-
-set maxSlew 0.060
-set slewInter 0.005
+#Generates the slew list, a list that goes from slewInter to maxSlew in slewInter intervals.
 set slewString ""
 set slewbase $slewInter
 while { $slewbase <= $maxSlew } {
@@ -153,10 +160,11 @@ while { $slewbase <= $maxSlew } {
 set slewString [string trimright $slewString " "]
 append exportText "set inputSlewList \"$slewString\"\n"
 
-
+#Creates the base load variable, which defines when the load interval needs to change.
 set baseLoad [expr $final_cap_interval * $cap_unit]
 append exportText "set baseLoad $baseLoad\n"
 
+#Creates the load list, a list that has outloadnum + 1 (0) elements. If the current load value is lower than baseLoad, we use the initial_cap_interval as an interval (currentvalue + initial_cap_interval); if not, we use the final_cap_interval. 
 set loadCounter 0
 set loadString ""
 set currentLoadValue 0
@@ -173,6 +181,7 @@ while { $loadCounter <= $outLoadNum } {
 set loadString [string trimright $loadString " "]
 append exportText "set loadList \"$loadString\"\n"
 
+#Exports the automatic inputs file.
 set newInputs [open "../automaticInputs.tcl" w]
 puts $newInputs $exportText
 close $newInputs

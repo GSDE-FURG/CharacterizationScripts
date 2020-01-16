@@ -59,52 +59,52 @@ foreach setupWirelength $wirelengthList {
 		
 		#Gets the current load, wirelength, input slew and input capacitance value and creates a key.
 		set power [lindex $configInfo 0]
-        set load [lindex $configInfo 1]
-        set delay [lindex $configInfo 2]
-        set dist [lindex $configInfo 3]
-        set outSlew [lindex $configInfo 4]
-        set inSlew [lindex $configInfo 5]
-        set inCap [lindex $configInfo 6]
-        set sol [lindex $configInfo 7]
+		set load [lindex $configInfo 1]
+		set delay [lindex $configInfo 2]
+		set dist [lindex $configInfo 3]
+		set outSlew [lindex $configInfo 4]
+		set inSlew [lindex $configInfo 5]
+		set inCap [lindex $configInfo 6]
+		set sol [lindex $configInfo 7]
 
 		set opt1 "${dist}-${outSlew}-${load}-${inCap}"
 
 		#Appends the current delay to the delay array, if there is one. If not, a new key-value combination is created.
 		
-        if {![info exists opt1Delay($opt1)]} {
-            set opt1Delay($opt1) $delay 
-            set opt1List "$opt1List $opt1"
-        } else {
-            set opt1Delay($opt1) "$opt1Delay($opt1) $delay"
-        }
+		if {![info exists opt1Delay($opt1)]} {
+		    set opt1Delay($opt1) $delay 
+		    set opt1List "$opt1List $opt1"
+		} else {
+		    set opt1Delay($opt1) "$opt1Delay($opt1) $delay"
+		}
 
-        #Appends the current power to the power array, if there is one. If not, a new key-value combination is created. Delay is also used as a key.
+		#Appends the current power to the power array, if there is one. If not, a new key-value combination is created. Delay is also used as a key.
 
-        if {![info exists opt1Power($opt1-${delay})]} {
-            set opt1Power($opt1-${delay}) $power
-        } else {
-            set opt1Power($opt1-${delay}) "$opt1Power($opt1-${delay}) $power"
-        }
+		if {![info exists opt1Power($opt1-${delay})]} {
+		    set opt1Power($opt1-${delay}) $power
+		} else {
+		    set opt1Power($opt1-${delay}) "$opt1Power($opt1-${delay}) $power"
+		}
 
-        #Appends the current slew to the slew array, if there is one. If not, a new key-value combination is created. Delay and power are used in the key.
+		#Appends the current slew to the slew array, if there is one. If not, a new key-value combination is created. Delay and power are used in the key.
 
-        if {![info exists opt1inSlew($opt1-${delay}-${power})]} {
-            set opt1inSlew($opt1-${delay}-${power}) $inSlew
-        } else {
-            set opt1inSlew($opt1-${delay}-${power}) "$opt1inSlew($opt1-${delay}-${power}) $inSlew"
-        }
+		if {![info exists opt1inSlew($opt1-${delay}-${power})]} {
+		    set opt1inSlew($opt1-${delay}-${power}) $inSlew
+		} else {
+		    set opt1inSlew($opt1-${delay}-${power}) "$opt1inSlew($opt1-${delay}-${power}) $inSlew"
+		}
 
-        #Gets the full key that represents the current solution. 
+		#Gets the full key that represents the current solution. 
 
-        set cur "${opt1}-${delay}-${power}-${inSlew}"
+		set cur "${opt1}-${delay}-${power}-${inSlew}"
 
-        #Stores the current solution in the total solution array. Prints an error in case there is another solution with the same key.
+		#Stores the current solution in the total solution array. Prints an error in case there is another solution with the same key.
 
-        if {![info exists totSol($cur)]} {
-            set totSol($cur) $sol
-        } else {
-            puts "ERROR!!: overlapping solutions"
-        }	
+		if {![info exists totSol($cur)]} {
+		    set totSol($cur) $sol
+		} else {
+		    puts "ERROR!!: overlapping solutions"
+		}	
 	}
 }
 
@@ -120,48 +120,48 @@ set opt1List [lsort -uniq $opt1List]
 #For each key combination (${dist}-${outSlew}-${load}-${inCap})...
 foreach opt1 $opt1List {
 	#Checks if the number of solutions is lower than 3
-    if {[llength $opt1Delay($opt1)] <= [llength $selPoints]} {
-    	#If it is lower than 3, put all of them in the output text file.
-        foreach cDelay $opt1Delay($opt1) {
-        	#Iterates in the delay array in order to obtain the other values.
-            #Gets the power value, also used as a key for slew.
-            set cPower [lindex [lsort -real -increasing $opt1Power($opt1-${cDelay})] 0]
-            #Gets the slew value, used to create the total key for totSol
-            set cInSlew [lindex $opt1inSlew($opt1-${cDelay}-${cPower}) end]
-            #Gets the rest of the informating necessary to re-create the line.
-            set cur "$opt1-${cDelay}-${cPower}-${cInSlew}"
-            set cSol $totSol($cur)
-            regsub -all {\-} $opt1 " " temp 
-            set cInCap [lindex $temp 3]
-            set cLoad [lindex $temp 2]
-            set cOutSlew [lindex $temp 1]
-            set cDist [lindex $temp 0]
-            #Recreates the line and put it in the resulting concat.lut file.
-            set output "${cPower} ${cLoad} ${cDelay} ${cDist} ${cOutSlew} ${cInSlew} ${cInCap} ${cSol}"
-            append outputText "$output\n"
-        }
-    } else {
-    	#If it is higher than 3, create 3 custom indexes from the selPoints list.		
-        foreach loc $selPoints {
+	if {[llength $opt1Delay($opt1)] <= [llength $selPoints]} {
+		#If it is lower than 3, put all of them in the output text file.
+		foreach cDelay $opt1Delay($opt1) {
+			#Iterates in the delay array in order to obtain the other values.
+			#Gets the power value, also used as a key for slew.
+			set cPower [lindex [lsort -real -increasing $opt1Power($opt1-${cDelay})] 0]
+			#Gets the slew value, used to create the total key for totSol
+			set cInSlew [lindex $opt1inSlew($opt1-${cDelay}-${cPower}) end]
+			#Gets the rest of the informating necessary to re-create the line.
+			set cur "$opt1-${cDelay}-${cPower}-${cInSlew}"
+			set cSol $totSol($cur)
+			regsub -all {\-} $opt1 " " temp 
+			set cInCap [lindex $temp 3]
+			set cLoad [lindex $temp 2]
+			set cOutSlew [lindex $temp 1]
+			set cDist [lindex $temp 0]
+			#Recreates the line and put it in the resulting concat.lut file.
+			set output "${cPower} ${cLoad} ${cDelay} ${cDist} ${cOutSlew} ${cInSlew} ${cInCap} ${cSol}"
+			append outputText "$output\n"
+        	}
+	} else {
+    		#If it is higher than 3, create 3 custom indexes from the selPoints list.		
+        	foreach loc $selPoints {
         	#Gets the solution index based a multiplier (number in selPoints).
-            set idx [expr int(floor($loc*1.0*[llength $opt1Delay($opt1)]))]
-            #Gets the delay value from that index. From here the computations are the same as above.
-            set cDelay [lindex $opt1Delay($opt1) $idx]
-            #Gets the power value, also used as a key for slew.	
-            set cPower [lindex [lsort -real -increasing $opt1Power($opt1-${cDelay})] 0]
-            #Gets the slew value, used to create the total key for totSol
-            set cInSlew [lindex $opt1inSlew($opt1-${cDelay}-${cPower}) end]
-            #Gets the rest of the informating necessary to re-create the line.
-            set cur "$opt1-${cDelay}-${cPower}-${cInSlew}"
-            set cSol $totSol($cur)
-            regsub -all {\-} $opt1 " " temp 
-            set cInCap [lindex $temp 3]
-            set cLoad [lindex $temp 2]
-            set cOutSlew [lindex $temp 1]
-            set cDist [lindex $temp 0]
-            #Recreates the line and put it in the resulting concat.lut file.
-            set output "${cPower} ${cLoad} ${cDelay} ${cDist} ${cOutSlew} ${cInSlew} ${cInCap} ${cSol}"
-            append outputText "$output\n"
+		set idx [expr int(floor($loc*1.0*[llength $opt1Delay($opt1)]))]
+		#Gets the delay value from that index. From here the computations are the same as above.
+		set cDelay [lindex $opt1Delay($opt1) $idx]
+		#Gets the power value, also used as a key for slew.	
+		set cPower [lindex [lsort -real -increasing $opt1Power($opt1-${cDelay})] 0]
+		#Gets the slew value, used to create the total key for totSol
+		set cInSlew [lindex $opt1inSlew($opt1-${cDelay}-${cPower}) end]
+		#Gets the rest of the informating necessary to re-create the line.
+		set cur "$opt1-${cDelay}-${cPower}-${cInSlew}"
+		set cSol $totSol($cur)
+		regsub -all {\-} $opt1 " " temp 
+		set cInCap [lindex $temp 3]
+		set cLoad [lindex $temp 2]
+		set cOutSlew [lindex $temp 1]
+		set cDist [lindex $temp 0]
+		#Recreates the line and put it in the resulting concat.lut file.
+		set output "${cPower} ${cLoad} ${cDelay} ${cDist} ${cOutSlew} ${cInSlew} ${cInCap} ${cSol}"
+		append outputText "$output\n"
         }
     }
 }

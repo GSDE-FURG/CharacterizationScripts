@@ -34,14 +34,11 @@
 source ../manualInputs.tcl
 
 
-###################################################################
-#here are the data necessary to run OPENSTA
-#liberty contains the path to the liberty file.
-
-
+#here are the inputs necessary to run OPENSTA
 read_liberty "$libpath"
 
 read_verilog "../$verilog"  
+
 #verilog with the gates necessary to evaluate pin capacitance
 link_design top
 

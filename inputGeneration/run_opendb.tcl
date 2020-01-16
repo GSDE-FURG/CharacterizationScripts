@@ -34,8 +34,6 @@
 
 source ../manualInputs.tcl
 
-#SCRIPT
-
 # Open database and load LEF
 set db [dbDatabase_create]
 
@@ -118,7 +116,7 @@ if {($max_capacitance == 0) || ($max_resistance == 0) } {
 puts "$min_capacitance $min_resistance $max_capacitance $max_resistance"
 
 
-#media dos valores obtidos no max_layer e min_layer
+#mean of values obtained from max_layer and min_layer
 set c_sqr [expr {($min_capacitance + $max_capacitance)/2}]
 set r_sqr [expr {($min_resistance + $max_resistance)/2}]
 
