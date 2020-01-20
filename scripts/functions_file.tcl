@@ -31,7 +31,9 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#File containing the implementation for each function used in create_lut and create_verilog_spef
+#File containing the implementation for each function used in characterization. Also contains boolean control variables.
+
+set setIOasPorts 0
 
 proc dec2bin i {
     #Returns a list that represents a decimal number in binary, e.g. dec2bin 10 => 1 0 1 0 
@@ -45,10 +47,10 @@ proc dec2bin i {
     return $res
 }
 
-proc get_pincapmax {pin_nm} {
+proc get_pincapmax {pin_nm reportPath} {
 	#Uses OpenSTA to generate a report on the pin capacitance. It results in one line that can be in a few different formats depending on the liberty file.
-	report_pin $pin_nm > pin.rpt
-	set pin_rpt	[open "./pin.rpt" r]
+	report_pin $pin_nm > "${reportPath}/pin.rpt"
+	set pin_rpt	[open "${reportPath}/pin.rpt" r]
 	set line [read $pin_rpt]
 
 	#One format is when there is only one capacitance in the liberty file, thus, the 3rd word in the pin report will be a number.
@@ -77,15 +79,15 @@ proc get_pincapmax {pin_nm} {
 
 	#Closes and deletes the pin report file and returns the pin capacitance.
 	close $pin_rpt
-	file delete pin.rpt
+	file delete "${reportPath}/pin.rpt"
 
 	return $pinCap
 }
 
-proc get_power {inst_nm type} {
+proc get_power {inst_nm type reportPath} {
 	#Uses OpenSTA to generate a report on the power of an instance. If results in multiple lines that contain the type of the power (switching, internal, leakage or total) and the numeric values.
-	report_power -instance $inst_nm > pwr.rpt
-	set pwr_rpt	[open "./pwr.rpt" r]
+	report_power -instance $inst_nm > "${reportPath}/pwr.rpt"
+	set pwr_rpt	[open "${reportPath}/pwr.rpt" r]
 	
 	set pwr_list ""
 	#Since there are multiple lines that don't contain the data that we want, we will reject the lines with text and only select the line with the power values, creating a list.
@@ -99,7 +101,7 @@ proc get_power {inst_nm type} {
 	
 	#Closes and deletes the power report file.	
 	close $pwr_rpt
-	file delete pwr.rpt
+	file delete "${reportPath}/pwr.rpt"
 
 	#Return the value based on the parameters used when the function was called. (switching, internal, leakage or total power)
 	if {$type == "internal"} {
@@ -137,7 +139,7 @@ proc computeDelay {outPin} {
 	return $delay
 }
 
-proc computeInputCapacitance {isPureWire currentLoad currentSolution currentWirelength solutionCounter} {
+proc computeInputCapacitance {isPureWire currentLoad currentSolution currentWirelength solutionCounter reportPath} {
 	global capacitancePerUnitLength
 	global baseLoad
 	global initial_cap_interval
@@ -158,7 +160,7 @@ proc computeInputCapacitance {isPureWire currentLoad currentSolution currentWire
 		foreach instance $currentSolution {
 			if { [ string is integer -strict $instance ] == 0 } {
 				#Current segment is not a number (wire), which means it is the buffer that we have to get the pin capacitance from.
-				set inPinCap [ get_pincapmax "buf_${solutionCounter}_0/${bufPinIn}"] 
+				set inPinCap [ get_pincapmax "buf_${solutionCounter}_0/${bufPinIn}" ${reportPath}] 
 				break
 			} else {
 				#Current segment is a number (wire), which represents the wirelength of the leftmost net.
@@ -177,16 +179,22 @@ proc computeInputCapacitance {isPureWire currentLoad currentSolution currentWire
 	return $inCap
 }
 
-proc computeWirePower {solutionCounter} {
+proc computeWirePower {solutionCounter reportPath} {
 	global setupWirelength
 	global setupCharacterizationUnit
-	#Computes the wire power (switching power). For that we use a spef file with load = 0.
-	read_spef "sol_w${setupWirelength}u${setupCharacterizationUnit}/sol_w${setupWirelength}u${setupCharacterizationUnit}l0.spef"
-	set wirePower [ get_power "ffin_${solutionCounter}" switching ]
+	global setIOasPorts
+	
+	if { $setIOasPorts == 1 } {
+		set wirePower [ get_power "buf_1_0" total ${reportPath}]
+	} else {
+		#Computes the wire power (switching power). For that we use a spef file with load = 0.
+		read_spef "${reportPath}/sol_w${setupWirelength}u${setupCharacterizationUnit}/sol_w${setupWirelength}u${setupCharacterizationUnit}l0.spef"
+		set wirePower [ get_power "ffin_${solutionCounter}" switching ${reportPath}]
+	}
 	return $wirePower
 }
 
-proc computePower {solutionCounter isPureWire currentSolution currentLoad currentWirePower} {
+proc computePower {solutionCounter isPureWire currentSolution currentLoad currentWirePower reportPath} {
 	global setupWirelength
 	global setupCharacterizationUnit
 
@@ -196,7 +204,7 @@ proc computePower {solutionCounter isPureWire currentSolution currentLoad curren
 	if { $isPureWire != 1 } {
 		foreach instance $currentSolution {
 			if { [ string is integer $instance ] == 0 } {
-				set totalPower [ get_power "buf_${solutionCounter}_${buffCounter}" sum ]
+				set totalPower [ get_power "buf_${solutionCounter}_${buffCounter}" sum ${reportPath}]
 				set totPower [ expr $totPower + $totalPower ]				
 				incr buffCounter
 			}

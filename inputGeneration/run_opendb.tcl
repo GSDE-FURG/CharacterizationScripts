@@ -32,7 +32,9 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-source ../manualInputs.tcl
+set rootPath [lindex $argv 0]
+
+source ${rootPath}/manualInputs.tcl
 
 # Open database and load LEF
 set db [dbDatabase_create]
@@ -122,7 +124,7 @@ set r_sqr [expr {($min_resistance + $max_resistance)/2}]
 
 puts "$c_sqr $r_sqr"
 
-set fp [open outdb.txt w]
+set fp [open "${rootPath}/inputGeneration/outdb.txt" w]
 
 puts $fp "$c_sqr $r_sqr $input_pin_buf $input1_pin_ff $input2_pin_ff $output_pin_buf $output_pin_ff"
 

@@ -32,16 +32,18 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-source ../manualInputs.tcl
+set rootPath [lindex $argv 0]
+
+source ${rootPath}/manualInputs.tcl
 
 #Gets data from OpenDB
-exec ../OpenDB/build/src/swig/tcl/opendbtcl run_opendb.tcl 2> opendb_log.txt
+exec ${rootPath}/OpenDB/build/src/swig/tcl/opendbtcl ${rootPath}/inputGeneration/run_opendb.tcl "${rootPath}" 2> ${rootPath}/inputGeneration/opendb_log.txt
 
 #Gets data from OpenSTA
-exec ../OpenSTA/app/sta run_opensta.tcl 2> opensta_log.txt
+exec ${rootPath}/OpenSTA/app/sta -no_splash ${rootPath}/inputGeneration/run_opensta.tcl 2> ${rootPath}/inputGeneration/opensta_log.txt
 
 #Opens the OpenDB report.
-set fdb	[open "./outdb.txt" r]
+set fdb	[open "${rootPath}/inputGeneration/outdb.txt" r]
 	
 gets $fdb line1
 
@@ -53,7 +55,7 @@ set name_outpin_buf [lindex $line1 5]
 set name_outpin_ff [lindex $line1 6]
 
 #Opens the OpenSTA report.
-set fsta	[open "./outsta.txt" r]
+set fsta	[open "${rootPath}/inputGeneration/outsta.txt" r]
 	
 gets $fsta line2
 gets $fsta line3
@@ -154,8 +156,8 @@ if { $resistanceUnit == "KOHM" } {
 set slewString ""
 set slewbase $slewInter
 while { $slewbase <= $maxSlew } {
-	append slewString "[format %.3f $slewbase ] "
-	set slewbase [expr ( $slewbase + $slewInter )]
+	append slewString "[format %.6f $slewbase ] "
+	set slewbase [expr double( $slewbase + $slewInter )]
 }
 set slewString [string trimright $slewString " "]
 append exportText "set inputSlewList \"$slewString\"\n"
@@ -166,14 +168,14 @@ append exportText "set baseLoad $baseLoad\n"
 
 #Creates the load list, a list that has outloadnum + 1 (0) elements. If the current load value is lower than baseLoad, we use the initial_cap_interval as an interval (currentvalue + initial_cap_interval); if not, we use the final_cap_interval. 
 set loadCounter 0
-set loadString ""
-set currentLoadValue 0
-while { $loadCounter <= $outLoadNum } {
-	append loadString "[expr int( $currentLoadValue )] "
+set loadString "0 "
+set currentLoadValue 1
+while { $loadCounter < $outLoadNum } {
+	append loadString "[format %.6f ${currentLoadValue}] "
 	if { $currentLoadValue < $baseLoad } {
-		set currentLoadValue [expr ( $currentLoadValue + ( $initial_cap_interval * $cap_unit ) )]
+		set currentLoadValue [expr double( $currentLoadValue + double( $initial_cap_interval * $cap_unit ) )]
 	} else {
-		set currentLoadValue [expr ( $currentLoadValue + ( $final_cap_interval * $cap_unit ) )]
+		set currentLoadValue [expr double( $currentLoadValue + double( $final_cap_interval * $cap_unit ) )]
 	}
 	incr loadCounter
 }
@@ -182,6 +184,6 @@ set loadString [string trimright $loadString " "]
 append exportText "set loadList \"$loadString\"\n"
 
 #Exports the automatic inputs file.
-set newInputs [open "../automaticInputs.tcl" w]
+set newInputs [open "${rootPath}/automaticInputs.tcl" w]
 puts $newInputs $exportText
 close $newInputs

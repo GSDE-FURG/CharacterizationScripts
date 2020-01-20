@@ -32,15 +32,16 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+set rootPath [lindex $argv 0]
+
 #Imports the configuration file.
-source ../automaticInputs.tcl
-source ../manualInputs.tcl
+source ${rootPath}/automaticInputs.tcl
+source ${rootPath}/manualInputs.tcl
 
 #Starts a timer for the current computation.
 puts "Post-processing of the lut file."
 set initialTime [clock seconds]	
 
-cd exported_luts
 
 #Creates 5 arrays where the data for a specific configuration will be stored.
 set opt1List ""
@@ -52,7 +53,7 @@ array set totSol {}
 #Iterates through each possible wirelength.
 foreach setupWirelength $wirelengthList {
 	#Opens the lut file representing that wirelength.
-	set lutFile [open "./${setupWirelength}.lut" r]
+	set lutFile [open "${rootPath}/scripts/exported_luts/${setupWirelength}.lut" r]
 	
 	#For each line in the lut file...
 	while {[gets $lutFile configInfo] >= 0} {
@@ -167,13 +168,13 @@ foreach opt1 $opt1List {
 }
 
 #Exports the text data to a file. (Also trims any leading "\n")
-set concatFile [ open "concat.lut" w ]
+set concatFile [ open "${rootPath}/scripts/exported_luts/concat.lut" w ]
 set outputText [ string trimright $outputText "\n" ]
 puts $concatFile "$outputText"
 close $concatFile
 
 #Opens the new file.
-set concatText [ open "concat.lut" r ]
+set concatText [ open "${rootPath}/scripts/exported_luts/concat.lut" r ]
 
 #Line index is a new variable that defines the reference between the two new files that will be created: lut.txt and sol_list.txt
 set lineIndex 0
@@ -306,13 +307,13 @@ while {[gets $concatText line]>=0} {
 }
 
 #Exports the text data to the sol_list.txt file. Also removes any leading "\n".
-set solutionsFile [ open ../../sol_list.txt w ]
+set solutionsFile [ open ${rootPath}/sol_list.txt w ]
 set solutionTextFile [ string trimright $solutionTextFile "\n" ]
 puts $solutionsFile "$solutionTextFile"
 close $solutionsFile
 
 #Exports the text data to the lut.txt file. Also adds a header with the minimun and maximun wirelength, capacitance and slew.
-set lutFile [open ../../lut.txt w]
+set lutFile [open ${rootPath}/lut.txt w]
 set outputLutText "$minWirelength $maxWirelength $minCapacitance $maxCapacitance $minSlew $maxSlew\n"
 append outputLutText "$convertedText"
 #Removes any leading "\n".

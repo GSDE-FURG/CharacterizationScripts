@@ -32,10 +32,29 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+proc find_parent_dir { dir } {
+	#Returns the parent directory (one folder above) of the provided path.
+	if { $dir == "." } {
+		return ".."
+	} else {
+		set path [file split $dir]
+		set path_len [llength $path]
+		if { $path_len == 1 } {
+			return "."
+		} else {
+			set path_len2 [expr $path_len - 2]
+			return [eval file join [lrange $path 0 $path_len2]]
+		}
+	}
+}
+
+set rootPath [file dirname $::argv0 ] 
+set rootPath [find_parent_dir [find_parent_dir $rootPath ] ]
+
 #Imports the configuration file and the functions file.
-source ../automaticInputs.tcl
-source ../manualInputs.tcl
-source functions_file.tcl
+source ${rootPath}/automaticInputs.tcl
+source ${rootPath}/manualInputs.tcl
+source ${rootPath}/scripts/functions_file.tcl
 
 #OpenSTA configurations.
 set sta_report_default_digits 6
@@ -48,19 +67,19 @@ set sdc_version 2.0
 read_liberty "$libpath"
 
 #Creates a folder where the new LUT files are placed.
-if {![file exists "exported_luts"]} {
-	exec mkdir "exported_luts"
+if {![file exists "${rootPath}/scripts/exported_luts"]} {
+	exec mkdir "${rootPath}/scripts/exported_luts"
 } else {
-	exec rm -rf "exported_luts"
-	exec mkdir "exported_luts"
+	exec rm -rf "${rootPath}/scripts/exported_luts"
+	exec mkdir "${rootPath}/scripts/exported_luts"
 }
 
 #Iterates through all possible wirelengths.
 foreach setupWirelength $wirelengthList {
 
 	#If a lut file already exists, delete it.
-	if {[file exist "exported_luts/${setupWirelength}.lut"]} {
-		exec rm -rf "exported_luts/${setupWirelength}.lut"
+	if {[file exist "${rootPath}/scripts/exported_luts/${setupWirelength}.lut"]} {
+		exec rm -rf "${rootPath}/scripts/exported_luts/${setupWirelength}.lut"
 	} 
 
 	#Starts a timer for the current computation.
@@ -68,9 +87,14 @@ foreach setupWirelength $wirelengthList {
 	set initialTime [clock seconds]	
 
 	#Reads the verilog file, elaborates the design and creates a clock.
-	read_verilog "sol_w${setupWirelength}u${setupCharacterizationUnit}/sol_w${setupWirelength}u${setupCharacterizationUnit}.v"
+	read_verilog "${rootPath}/scripts/sol_w${setupWirelength}u${setupCharacterizationUnit}/sol_w${setupWirelength}u${setupCharacterizationUnit}.v"
 	link_design "sol_w${setupWirelength}u${setupCharacterizationUnit}"
-	create_clock [get_ports clk]  -period 1  -waveform {0 0.5}
+	if { $setIOasPorts == 1 } {
+		#If inputs and outputs are ports, there is only one spef file that we need to read.
+		read_spef "${rootPath}/scripts/sol_w${setupWirelength}u${setupCharacterizationUnit}/sol_w${setupWirelength}u${setupCharacterizationUnit}.spef"
+	} else {
+		create_clock [get_ports clk]  -period 1  -waveform {0 0.5}
+	}
 
 	#The number of possible topologies for a wirelength and characterization unit is 2^(wl/cu).
 	set numberOfTopologies [ expr 2 ** [expr $setupWirelength / $setupCharacterizationUnit ] ]
@@ -99,9 +123,12 @@ foreach setupWirelength $wirelengthList {
 		#Creates a variable with the name of the output pin of the leftmost FF and input pin of the rightmost FF.
 		set outPin "ffout_${solutionCounter}/${ffPinD}"
 		set inPin "ffin_${solutionCounter}/${ffPinQ}"
-
+		if { $setIOasPorts == 1 } {
+			set inPin "in${solutionCounter}"
+			set outPin "out${solutionCounter}"
+		}
 		#We can also compute the wirepower here to save some run-time.
-		set currentWirePower [computeWirePower $solutionCounter]
+		set currentWirePower [computeWirePower $solutionCounter "${rootPath}/scripts"]
 
 		#Boolean variable that defines when all possible buffer types were tested.
 		set buffersUpdate 1
@@ -124,18 +151,25 @@ foreach setupWirelength $wirelengthList {
 				#Load = 0 is only used to create the spef files and to compute the wire power.
 				if { $currentLoad == 0 } { continue }
 
-				#Reads the spef file for the current load.
-				read_spef "sol_w${setupWirelength}u${setupCharacterizationUnit}/sol_w${setupWirelength}u${setupCharacterizationUnit}l${currentLoad}.spef"
+				if { $setIOasPorts == 1 } {
+					set_load $currentLoad $outPin
+				} else {
+					#Reads the spef file for the current load.
+					read_spef "${rootPath}/scripts/sol_w${setupWirelength}u${setupCharacterizationUnit}/sol_w${setupWirelength}u${setupCharacterizationUnit}l${currentLoad}.spef"
+				}
 				
 				#Computes the input capacitance for the current configuration.
-				set currentInputCapacitance [ computeInputCapacitance $isPureWire $currentLoad $currentSolution $setupWirelength $solutionCounter]
+				set currentInputCapacitance [ computeInputCapacitance $isPureWire $currentLoad $currentSolution $setupWirelength $solutionCounter "${rootPath}/scripts"]
 	
 				foreach currentInputSlew $inputSlewList {
 					
 					#Uses OpenSTA in order to set a slew on the input pin (output of the leftmost FF). We also have to reload the spef file in order to make these changes have an effect.
 					set_assigned_transition -rise $currentInputSlew $inPin
 					set_assigned_transition -fall $currentInputSlew $inPin
-					read_spef "sol_w${setupWirelength}u${setupCharacterizationUnit}/sol_w${setupWirelength}u${setupCharacterizationUnit}l${currentLoad}.spef"
+
+					if { $setIOasPorts == 0 } {
+						read_spef "${rootPath}/scripts/sol_w${setupWirelength}u${setupCharacterizationUnit}/sol_w${setupWirelength}u${setupCharacterizationUnit}l${currentLoad}.spef"
+					}
 
 					#Computes the outputSlew for the current configuration, also tests if it is higher than a fixed value (2*maxSlew), and, if it is, it skips the current inputSLew value.
 					set currentOutputSlew [ computeOutputSlew $inPin $outPin $currentInputSlew ]
@@ -145,7 +179,7 @@ foreach setupWirelength $wirelengthList {
 					set currentDelay [ computeDelay $outPin ]
 					
 					#Computes the power for the current configuration. 
-					set currentPower [ computePower $solutionCounter $isPureWire $currentSolution $currentLoad $currentWirePower]
+					set currentPower [ computePower $solutionCounter $isPureWire $currentSolution $currentLoad $currentWirePower "${rootPath}/scripts"]
 
 					#Creates a key that represents the current solution. Composed of load, delay, wirelength, outputslew, inputslew and inputcap.
 					set solutionKey "$currentLoad-$currentDelay-$setupWirelength-$currentOutputSlew-$currentInputSlew-$currentInputCapacitance"
@@ -189,7 +223,7 @@ foreach setupWirelength $wirelengthList {
 		incr solutionCounter
 	}
 	#Opens the new LUT file.
-	set lutFile [ open "exported_luts/${setupWirelength}.lut" w ]
+	set lutFile [ open "${rootPath}/scripts/exported_luts/${setupWirelength}.lut" w ]
 	#Creates two new variables to store the text data. outputList will store the data in a list, in order to sort it based on the inputSlew. outputText will store the raw text data. 
 	set outputText ""
 	set outputList ""

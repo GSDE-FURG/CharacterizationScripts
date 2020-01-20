@@ -1,8 +1,8 @@
 #Full path to liberty file.
-set libpath "full path"
+set libpath "/home/gsde/Documentos/GitHub/CharacterizationScripts/example1_slow.lib"
 
 #Full path to lef file.
-set lef_file "full path"
+set lef_file "/home/gsde/Documentos/GitHub/CharacterizationScripts/NangateOpenCellLibrary.mod.lef"
 
 #Verilog that uses buffers and flip-flops (leave as-is).
 set verilog "buffs_dff.v"
