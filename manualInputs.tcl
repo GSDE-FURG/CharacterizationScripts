@@ -1,11 +1,11 @@
 #Full path to liberty file.
-set libpath "full path"
+set libpath "/home/gsde/Documentos/NANGATE45nm.lib"
 
 #Full path to lef file.
-set lef_file "full path"
+set lef_file "/home/gsde/Documentos/OpenDB/tests/data/Nangate45/NangateOpenCellLibrary.mod.lef"
 
 #Verilog that uses buffers and flip-flops (leave as-is).
-set verilog "buffs_dff.v"
+set verilog "../buffs_dff.v"
 
 #To calculate the capacitance and resistance per unit length of a wire. Uses the mean from min_layer and max_layer.
 set min_layer "metal4"
@@ -13,6 +13,8 @@ set max_layer "metal6"
 
 #List of buffers to use in the characterization.
 set bufferList "BUF_X1 BUF_X2 BUF_X4 BUF_X8 BUF_X16 BUF_X32"
+
+set ff_name "DFF_X1"
 
 #Max Slew for the simulation, also defines a slew limit (2*maxSlew). Value in nS.
 set maxSlew 0.060

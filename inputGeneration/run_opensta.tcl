@@ -34,21 +34,13 @@
 source ../manualInputs.tcl
 
 
-#here are the inputs necessary to run OPENSTA
-read_liberty "$libpath"
-
-read_verilog "../$verilog"  
-
-#verilog with the gates necessary to evaluate pin capacitance
-link_design top
-
-
 proc get_pincapmax {pin_nm} {
 	#Uses OpenSTA to generate a report on the pin capacitance. It results in one line that can be in a few different formats depending on the liberty file.
 	report_pin $pin_nm > pin.rpt
 	set pin_rpt	[open "./pin.rpt" r]
 	set line [read $pin_rpt]
-
+#puts [lindex $line 1]
+#puts	[get_property [get_lib_cells -of_objects [get_cells -of_objects [lindex $line 1] ]	] full_name]
 	#One format is when there is only one capacitance in the liberty file, thus, the 3rd word in the pin report will be a number.
 	if { [ string is double -strict [lindex $line 3] ] } {	
 		set pinCap [lindex $line 3]
@@ -59,8 +51,10 @@ proc get_pincapmax {pin_nm} {
 		#Another format is when there is a fall capacitance and a rise capacitance. In this case, we will return the higher one of the two.
 		set r_cap [lindex $line 4]
 		set f_cap [lindex $line 6]
-		if {[string first ":" $r_cap ] != -1} {	
+
+		if {[string first ":" r_cap ] != -1} {	
 			#These values can also can be an interval (string contains ":"). 
+			puts "$r_cap $c_cap"
 			set r_cap [lindex [split $r_cap ":"] 1]
    			set f_cap [lindex [split $f_cap ":"] 1]
 		}
@@ -79,9 +73,43 @@ proc get_pincapmax {pin_nm} {
 	return $pinCap
 }
 
+proc getMasters {} {
+#code to return all masters present in the verilog file.
+	set x [get_cells]
+	set i 0
+	set cell_list ""
+	while {[lindex $x $i] != ""} {
+		set a [get_name [get_lib_cells -of_objects [lindex $x $i]]] 
+		lappend cell_list $a
+		set i [expr {$i + 1}]
+	}
+	return $cell_list
+}
 
+proc getInstances {} {
+#code to return all instances present in the verilog file.
+	set x [get_cells]
+	set i 0
+	set cell_list ""
+	while {[lindex $x $i] != ""} {
+		set a [get_full_name [lindex $x $i]]     
+		#--> returns the name of instance
+		lappend cell_list $a
+		set i [expr {$i + 1}]
+	}
+	return $cell_list
+}
+#END OF PROCEDURES
+###################################################################
 
+read_liberty $libpath
 
+read_verilog $verilog  
+#verilog with the gates necessary to evaluate pin capacitance
+link_design top
+
+set masters [getMasters]
+set instances [getInstances]
 
 #read the output file of OPENDB and takes the name of buf_pin
 set f	[open "./outdb.txt" r]
@@ -93,24 +121,36 @@ set ff_pin2 [lindex $line 4]
 	
 close $f
 
-#gets the capacitance of the pins for all buffers in bufferList and create a list with the capacitances
-foreach i $bufferList {
-    set pin ""
-    append pin $i "/" $buf_pin
-    #puts $pin
-    lappend inPinCap [get_pincapmax $pin]
+#gets the capacitance of the pins for all buffers in buf_list and create a list with the capacitances
+for {set i 0} {$i < [llength $masters]} {incr i} {
+	for {set j 0} {$i < [llength [split $bufferList " "]]} {incr j} {
+		if { [lindex $bufferList $j] == [lindex $masters $i] } {
+			set pin ""
+    			append pin [lindex $instances $i] "/" $buf_pin
+    			#puts $pin
+    			lappend inPinCap [get_pincapmax $pin]
+			break
+		}
+	}
 }
-puts $inPinCap
+#puts $inPinCap
 
-set ff_name1 "DFF_X1"
-set ff_name2 "DFF_X1"
-append ff_name1 "/" $ff_pin1
-append ff_name2 "/" $ff_pin2
+for {set i 0} {$i < [llength $masters]} {incr i} {
+	if {[lindex $masters $i] == $ff_name } {
+		set ff_name1 [lindex $instances $i]
+		set ff_name2 [lindex $instances $i]
+		append ff_name1 "/" $ff_pin1
+		append ff_name2 "/" $ff_pin2
 
-set capff [get_pincapmax $ff_name1]
-puts $capff
-lappend capff [get_pincapmax $ff_name2]
-puts $capff
+		set capff [get_pincapmax $ff_name1]
+		#puts $capff
+		lappend capff [get_pincapmax $ff_name2]
+		#puts $capff
+		break
+	}
+
+}
+
 
 set fp [open outsta.txt w]
 

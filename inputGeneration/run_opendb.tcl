@@ -34,10 +34,12 @@
 
 source ../manualInputs.tcl
 
+#SCRIPT
+
 # Open database and load LEF
 set db [dbDatabase_create]
 
-set lib [odb_read_lef $db "$lef_file"]
+set lib [odb_read_lef $db $lef_file]
 
 if {$lib == "NULL"} {
     puts "Failed to read LEF file"
@@ -59,7 +61,7 @@ foreach i $layers {
 }
 
 foreach i $gates {
-    if { [$i getName] == "BUF_X1"} {
+    if { [$i getName] == [lindex $bufferList 0] } {
 	set a [$i getMTerms]
 	set input_pin_buf [[lindex $a 0] getName]
 	set output_pin_buf [[lindex $a 1] getName]
@@ -69,17 +71,34 @@ foreach i $gates {
 	break
     }	
 }
-foreach i $gates {
-   if { [$i getName] == "DFF_X1"} {
-	set a [$i getMTerms]
-	set input1_pin_ff [[lindex $a 0] getName]
-	set input2_pin_ff [[lindex $a 1] getName]
-	set output_pin_ff [[lindex $a 2] getName]
-	puts "DFF name: [$i getName] found!" 
-	puts "Input pins: $input1_pin_ff $input2_pin_ff"
-	puts "Output pin: $output_pin_ff"
-	break
-    }
+set ffsource false
+#false determines the stable execution, true is using the isSequential function of OpenDB
+if { !$ffsource } {
+	foreach i $gates {
+	   if { [$i getName] == $ff_name} {
+		set a [$i getMTerms]
+		set input1_pin_ff [[lindex $a 0] getName]
+		set input2_pin_ff [[lindex $a 1] getName]
+		set output_pin_ff [[lindex $a 2] getName]
+		puts "DFF name: [$i getName] found!" 
+		puts "Input pins: $input1_pin_ff $input2_pin_ff"
+		puts "Output pin: $output_pin_ff"
+		break
+	   }
+	}
+} else {
+	foreach i $gates {
+	   if { [$i isSequential]} {
+		set a [$i getMTerms]
+		set input1_pin_ff [[lindex $a 0] getName]
+		set input2_pin_ff [[lindex $a 1] getName]
+		set output_pin_ff [[lindex $a 2] getName]
+		puts "FF name: [$i getName] found!" 
+		puts "Input pins: $input1_pin_ff $input2_pin_ff"
+		puts "Output pin: $output_pin_ff"
+		break
+	    }
+	}
 }
 
 foreach i $layers {
@@ -116,7 +135,7 @@ if {($max_capacitance == 0) || ($max_resistance == 0) } {
 puts "$min_capacitance $min_resistance $max_capacitance $max_resistance"
 
 
-#mean of values obtained from max_layer and min_layer
+#media dos valores obtidos no max_layer e min_layer
 set c_sqr [expr {($min_capacitance + $max_capacitance)/2}]
 set r_sqr [expr {($min_resistance + $max_resistance)/2}]
 
@@ -127,8 +146,5 @@ set fp [open outdb.txt w]
 puts $fp "$c_sqr $r_sqr $input_pin_buf $input1_pin_ff $input2_pin_ff $output_pin_buf $output_pin_ff"
 
 close $fp
-
-exit
-
 
 
