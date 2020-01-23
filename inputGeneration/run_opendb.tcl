@@ -34,8 +34,6 @@
 
 source ../manualInputs.tcl
 
-<<<<<<< Updated upstream
-=======
 proc createVerilog {buf_list buf_inpin buf_outpin ff_name ff_inpin ff_ckpin ff_outpin} {
 
 	#header of the verilog file
@@ -61,7 +59,6 @@ close $fp
 
 
 
->>>>>>> Stashed changes
 #SCRIPT
 
 # Open database and load LEF
