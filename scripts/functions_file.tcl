@@ -35,6 +35,22 @@
 
 set setIOasPorts 0
 
+proc truncateNum {num} {
+	#Returns a string with any leading 0s removed.
+	while {1} {
+		set stringchar [string index $num end]
+		if { ${stringchar} == "0" } {
+			set num [ string range $num 0 [expr ( [string length $num] - 2 ) ] ]
+		} elseif {${stringchar} == "." } {
+			#If a decimal point is found: remove it and instantly return the string.
+			set num [ string range $num 0 [expr ( [string length $num] - 2 ) ] ]
+			return $num
+		} else {
+			return $num
+		}
+	}
+}
+
 proc dec2bin i {
     #Returns a list that represents a decimal number in binary, e.g. dec2bin 10 => 1 0 1 0 
     set res {} 

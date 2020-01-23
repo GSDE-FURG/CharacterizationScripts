@@ -35,6 +35,7 @@
 set rootPath [lindex $argv 0]
 
 source ${rootPath}/manualInputs.tcl
+source ${rootPath}/scripts/functions_file.tcl
 
 #Gets data from OpenDB
 exec ${rootPath}/OpenDB/build/src/swig/tcl/opendbtcl ${rootPath}/inputGeneration/run_opendb.tcl "${rootPath}" 2> ${rootPath}/inputGeneration/opendb_log.txt
@@ -132,7 +133,7 @@ if { $timeUnit == "PS" } {
 append exportText "set capacitanceUnit ${capacitanceUnit}\n"
 if { $capacitanceUnit == "FF" } {
 	append exportText "set cap_unit 1000\n"
-	append exportText "set capacitancePerUnitLength [expr ( $lefcappsqr * 1000 )]\n"
+	append exportText "set capacitancePerUnitLength [truncateNum [format %.12f [expr ( $lefcappsqr * 1000 )]]]\n"
 	set cap_unit 1000
 } elseif { $capacitanceUnit == "PF" } {
 	append exportText "set cap_unit 1\n"
@@ -145,7 +146,7 @@ if { $capacitanceUnit == "FF" } {
 #Sets the base unit as ohm. Updates the resistance per unit length if needed, since it is fixed on ohm.
 append exportText "set resistanceUnit ${resistanceUnit}\n"
 if { $resistanceUnit == "KOHM" } {
-	append exportText "set resistancePerUnitLength [expr ( $lefrespsqr / 1000 )]\n"
+	append exportText "set resistancePerUnitLength [truncateNum [format %.12f [expr ( $lefrespsqr / 1000 )]]]\n"
 } elseif { $capacitanceUnit == "PF" } {
 	append exportText "set resistancePerUnitLength ${lefrespsqr}\n"
 } else {
@@ -156,7 +157,9 @@ if { $resistanceUnit == "KOHM" } {
 set slewString ""
 set slewbase $slewInter
 while { $slewbase <= $maxSlew } {
-	append slewString "[format %.6f $slewbase ] "
+	set slewNumber [format %.12f $slewbase ]
+	set slewNumber [truncateNum $slewNumber]
+	append slewString "${slewNumber} "
 	set slewbase [expr double( $slewbase + $slewInter )]
 }
 set slewString [string trimright $slewString " "]
@@ -168,10 +171,12 @@ append exportText "set baseLoad $baseLoad\n"
 
 #Creates the load list, a list that has outloadnum + 1 (0) elements. If the current load value is lower than baseLoad, we use the initial_cap_interval as an interval (currentvalue + initial_cap_interval); if not, we use the final_cap_interval. 
 set loadCounter 0
-set loadString "0 "
-set currentLoadValue 1
-while { $loadCounter < $outLoadNum } {
-	append loadString "[format %.6f ${currentLoadValue}] "
+set loadString ""
+set currentLoadValue 0.0
+while { $loadCounter <= $outLoadNum } {
+	set loadNumber [format %.12f ${currentLoadValue}]
+	set loadNumber [truncateNum $loadNumber]
+	append loadString "${loadNumber} "
 	if { $currentLoadValue < $baseLoad } {
 		set currentLoadValue [expr double( $currentLoadValue + double( $initial_cap_interval * $cap_unit ) )]
 	} else {
