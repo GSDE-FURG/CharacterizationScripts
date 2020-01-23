@@ -194,9 +194,11 @@ foreach setupWirelength $wirelengthList {
 						set previousPower [ lindex $currentValue 0 ]
 						if { $previousPower > $currentPower } {
 							#If the current power value is lower the the previous one, we need to eplace the old values with the information for the current line.
-							dict replace uniqueSolutionList $solutionKey "$solutionText $lineIndex"
+							dict set uniqueSolutionList $solutionKey "$solutionText $lineIndex" 
 							#Also, we have to empty the information of the last line. Erasing it would mess up the references for the lineIndex.
-							lset [dict get $outputTextData $solutionIndex ] $valueIndex ""
+							set textLines [dict get $outputTextData $solutionIndex ]
+							lset textLines $valueIndex ""
+							dict set outputTextData $solutionIndex "$textLines"
 							#Updates outputTextData with the new line. Also increments the lineIndex.
 							dict lappend outputTextData $solutionText "$currentPower $currentLoad $currentDelay $setupWirelength $currentOutputSlew $currentInputSlew $currentInputCapacitance $solutionText "
 							incr lineIndex
