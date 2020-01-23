@@ -34,6 +34,34 @@
 
 source ../manualInputs.tcl
 
+<<<<<<< Updated upstream
+=======
+proc createVerilog {buf_list buf_inpin buf_outpin ff_name ff_inpin ff_ckpin ff_outpin} {
+
+	#header of the verilog file
+	set text "module top (clk, out);\n"
+	append text "input clk;\n"
+	append text "output out;\n\n"
+	#generation of all buffers on verilog file
+	for {set i 0} {$i < [llength $buf_list]} {incr i} {
+		append text "[lindex $buf_list $i] a$i (.$buf_inpin (dummy), .$buf_outpin (out));\n"
+	}
+
+	append text "$ff_name a$i (.$ff_inpin (dummy), .$ff_ckpin (clk), .$ff_outpin (out));\n\n"
+
+	append text "endmodule"
+
+set fp [open ../buffs_dff.v w]
+
+puts $fp $text
+
+close $fp
+}
+
+
+
+
+>>>>>>> Stashed changes
 #SCRIPT
 
 # Open database and load LEF
@@ -107,6 +135,10 @@ foreach i $layers {
 	}
     incr max_index
 }
+
+
+createVerilog $bufferList $input_pin_buf $output_pin_buf $ff_name $input1_pin_ff $input2_pin_ff $output_pin_ff
+
 
 #definition and extraction of r_sqr and c_sqr of max_layer and min_layer
 set minlayer [lindex $layers $min_index]

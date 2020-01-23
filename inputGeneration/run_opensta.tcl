@@ -32,7 +32,11 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 source ../manualInputs.tcl
+<<<<<<< Updated upstream
 
+=======
+set verilog "../buffs_dff.v"
+>>>>>>> Stashed changes
 
 proc get_pincapmax {pin_nm} {
 	#Uses OpenSTA to generate a report on the pin capacitance. It results in one line that can be in a few different formats depending on the liberty file.
@@ -85,6 +89,7 @@ proc getMasters {} {
 	}
 	return $cell_list
 }
+<<<<<<< Updated upstream
 
 proc getInstances {} {
 #code to return all instances present in the verilog file.
@@ -102,6 +107,25 @@ proc getInstances {} {
 #END OF PROCEDURES
 ###################################################################
 
+=======
+
+proc getInstances {} {
+#code to return all instances present in the verilog file.
+	set x [get_cells]
+	set i 0
+	set cell_list ""
+	while {[lindex $x $i] != ""} {
+		set a [get_full_name [lindex $x $i]]     
+		#--> returns the name of instance
+		lappend cell_list $a
+		set i [expr {$i + 1}]
+	}
+	return $cell_list
+}
+#END OF PROCEDURES
+###################################################################
+
+>>>>>>> Stashed changes
 read_liberty $libpath
 
 read_verilog $verilog  
