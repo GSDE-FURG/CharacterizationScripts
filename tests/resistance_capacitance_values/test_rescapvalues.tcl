@@ -19,31 +19,25 @@ proc find_parent_dir { dir } {
 }
 
 
-#retorna o diretório do script que está sendo executado
+#returns the directory where the script is located
 set current_dir [file dirname [file normalize [info script]]]
 
-#a função find_parent_dir faz um comando "cd .." no diretório
-set base_dir [find_parent_dir $current_dir]
-
-#por fim, entramos na pasta "data" que seria uma outra pasta que está no mesmo nível da pasta em que está o script
-#ex:: caminho do script --> /home/gsde/tcl
-#caminho da pasta data ---> /home/gsde/data
-set data_dir [file join $base_dir "inputGeneration"]
-#puts $data_dir
+#gets the directory that is 2 folders up from current_dir
+set base_dir [find_parent_dir [find_parent_dir $current_dir]]
 
 set OPENDB_dir [file join $base_dir "OpenDB/build/src/swig/tcl/opendbtcl"]
 
 #puts $OPENDB_dir
-set uut [file join $data_dir "run_opendb.tcl"]
+set uut [file join $base_dir "inputGeneration/run_opendb.tcl"]
 #puts $uut
-exec $OPENDB_dir "$uut" 2> opendb_log.txt
+exec $OPENDB_dir "$uut" "${base_dir}" 2> "${base_dir}/inputGeneration/opendb_log.txt"
 
-set fexist [ file exist [ file join $current_dir "outdb.txt"] ]
+set fexist [ file exist "${base_dir}/inputGeneration/opendb_log.txt" ]
 #puts $fexist
 
 if {$fexist ==1} {
 
-	set fp [ open outdb.txt r]
+	set fp [ open "${base_dir}/inputGeneration/outdb.txt" r]
 	gets $fp line
 
 	if { [ string trim $line ] != ""} {
@@ -51,14 +45,18 @@ if {$fexist ==1} {
    		set r_cap [ lindex $line 1]
 
    		if {  [string length $r_cap] != 0  &&  [string length $c_cap] != 0  } {
+			puts "GREEN: Values obtained correctly."
    			return 0
    		} else{
+			puts "RED: Error when obtaining r_sqr and c_sqr."
    			return 1
    		}
 
    	} else {
+		puts "RED: Error when obtaining r_sqr and c_sqr."
    		return 1
    	}
 } else {
+	puts "RED: Error when obtaining r_sqr and c_sqr."
 	return 1
 }
