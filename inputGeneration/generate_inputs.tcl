@@ -41,7 +41,7 @@ source ${rootPath}/scripts/functions_file.tcl
 exec ${rootPath}/OpenDB/build/src/swig/tcl/opendbtcl ${rootPath}/inputGeneration/run_opendb.tcl "${rootPath}" 2> ${rootPath}/inputGeneration/opendb_log.txt
 
 #Gets data from OpenSTA
-exec ${rootPath}/OpenSTA/app/sta -no_splash ${rootPath}/inputGeneration/run_opensta.tcl 2> ${rootPath}/inputGeneration/opensta_log.txt
+exec ${rootPath}/OpenSTA/app/sta -no_splash ${rootPath}/inputGeneration/run_opensta.tcl > ${rootPath}/inputGeneration/opensta_log.txt
 
 #Opens the OpenDB report.
 set fdb	[open "${rootPath}/inputGeneration/outdb.txt" r]

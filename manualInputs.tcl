@@ -4,15 +4,16 @@ set libpath "/home/gsde/Documentos/GitHub/CharacterizationScripts/example1_slow.
 #Full path to lef file.
 set lef_file "/home/gsde/Documentos/GitHub/CharacterizationScripts/NangateOpenCellLibrary.mod.lef"
 
-#Verilog that uses buffers and flip-flops (leave as-is).
+#Verilog that uses buffers and flip-flops (created automatically, leave as-is).
 set verilog "buffs_dff.v"
 
 #To calculate the capacitance and resistance per unit length of a wire. Uses the mean from min_layer and max_layer.
 set min_layer "metal4"
 set max_layer "metal6"
 
-#List of buffers to use in the characterization.
+#List of buffers to use in the characterization. Also the name of any flip-flop.
 set bufferList "BUF_X1 BUF_X2 BUF_X4 BUF_X8 BUF_X16 BUF_X32"
+set ff_name "DFF_X1"
 
 #Max Slew for the simulation, also defines a slew limit (2*maxSlew). Value in nS.
 set maxSlew 0.060

@@ -54,13 +54,43 @@ set rootPath [find_parent_dir [find_parent_dir $rootPath ] ]
 source ${rootPath}/manualInputs.tcl
 source ${rootPath}/scripts/functions_file.tcl
 
-#here are the inputs necessary to run OPENSTA
-read_liberty "$libpath"
+proc getMasters {} {
+#code to return all masters present in the verilog file.
+	set x [get_cells]
+	set i 0
+	set cell_list ""
+	while {[lindex $x $i] != ""} {
+		set a [get_name [get_lib_cells -of_objects [lindex $x $i]]] 
+		lappend cell_list $a
+		set i [expr {$i + 1}]
+	}
+	return $cell_list
+}
 
-read_verilog "${rootPath}/$verilog"  
+proc getInstances {} {
+#code to return all instances present in the verilog file.
+	set x [get_cells]
+	set i 0
+	set cell_list ""
+	while {[lindex $x $i] != ""} {
+		set a [get_full_name [lindex $x $i]]     
+		#--> returns the name of instance
+		lappend cell_list $a
+		set i [expr {$i + 1}]
+	}
+	return $cell_list
+}
+#END OF PROCEDURES
+###################################################################
 
+read_liberty $libpath
+
+read_verilog "${rootPath}/${verilog}"  
 #verilog with the gates necessary to evaluate pin capacitance
 link_design top
+
+set masters [getMasters]
+set instances [getInstances]
 
 #read the output file of OPENDB and takes the name of buf_pin
 set f	[open "${rootPath}/inputGeneration/outdb.txt" r]
@@ -73,23 +103,42 @@ set ff_pin2 [lindex $line 4]
 close $f
 
 #gets the capacitance of the pins for all buffers in bufferList and create a list with the capacitances
-foreach i $bufferList {
-    set pin ""
-    append pin $i "/" $buf_pin
-    #puts $pin
-    lappend inPinCap [get_pincapmax $pin "${rootPath}/inputGeneration"]
+for {set i 0} {$i < [llength $masters]} {incr i} {
+	for {set j 0} {$i < [llength [split $bufferList " "]]} {incr j} {
+		if { [lindex $bufferList $j] == [lindex $masters $i] } {
+			set pin ""
+    			append pin [lindex $instances $i] "/" $buf_pin
+    			#puts $pin
+    			lappend inPinCap [get_pincapmax $pin $rootPath ]
+			break
+		}
+	}
 }
-puts $inPinCap
+#puts $inPinCap
 
-set ff_name1 "DFF_X1"
-set ff_name2 "DFF_X1"
-append ff_name1 "/" $ff_pin1
-append ff_name2 "/" $ff_pin2
+for {set i 0} {$i < [llength $masters]} {incr i} {
+	if {[lindex $masters $i] == $ff_name } {
+		set ff_name1 [lindex $instances $i]
+		set ff_name2 [lindex $instances $i]
+		append ff_name1 "/" $ff_pin1
+		append ff_name2 "/" $ff_pin2
 
-set capff [get_pincapmax $ff_name1 "${rootPath}/inputGeneration"]
-puts $capff
-lappend capff [get_pincapmax $ff_name2 "${rootPath}/inputGeneration"]
-puts $capff
+		set capff [get_pincapmax $ff_name1 $rootPath ]
+		#puts $capff
+		lappend capff [get_pincapmax $ff_name2 $rootPath ]
+		#puts $capff
+
+		#Change ff_name so that it uses the liberty name.
+		set ff_name1 $ff_name
+		set ff_name2 $ff_name
+		append ff_name1 "/" $ff_pin1
+		append ff_name2 "/" $ff_pin2
+
+		break
+	}
+
+}
+
 
 set fp [open "${rootPath}/inputGeneration/outsta.txt" w]
 
