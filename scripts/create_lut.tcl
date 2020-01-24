@@ -92,6 +92,10 @@ foreach setupWirelength $wirelengthList {
 	if { $setIOasPorts == 1 } {
 		#If inputs and outputs are ports, there is only one spef file that we need to read.
 		read_spef "${rootPath}/scripts/sol_w${setupWirelength}u${setupCharacterizationUnit}/sol_w${setupWirelength}u${setupCharacterizationUnit}.spef"
+		create_clock -period 1 -waveform {0 0.5} -name virtual
+		set_input_delay -clock virtual 0 [all_inputs]
+		set_output_delay -clock virtual 0 [all_outputs]
+		set_drive [expr double(${setupWirelength} * ${resistancePerUnitLength})] [all_inputs]
 	} else {
 		create_clock [get_ports clk]  -period 1  -waveform {0 0.5}
 	}

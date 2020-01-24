@@ -33,7 +33,8 @@
 
 #File containing the implementation for each function used in characterization. Also contains boolean control variables.
 
-set setIOasPorts 0
+set setIOasPorts 1
+set bigVerilogs 1
 
 proc truncateNum {num} {
 	#Returns a string with any leading 0s removed.
@@ -135,9 +136,15 @@ proc get_power {inst_nm type reportPath} {
 
 proc computeOutputSlew {inPin outPin currentInputSlew} {
 	global slewInter
+	global setIOasPorts
 	#With the input slew set, we see its effects on the output pin (input of the rightmost FF).
-	set tr	[get_property -object_type pin $outPin actual_rise_transition_max]
-	set tf [get_property -object_type pin $outPin actual_fall_transition_max]
+	if { $setIOasPorts == 1 } {
+		set tr	[get_property -object_type port $outPin actual_rise_transition_max]
+		set tf [get_property -object_type port $outPin actual_fall_transition_max]
+	} else {
+		set tr	[get_property -object_type pin $outPin actual_rise_transition_max]
+		set tf [get_property -object_type pin $outPin actual_fall_transition_max]
+	}
 	#Computes the mean value between the rise and fall times of the output pin.
 	set trans [expr ( ( $tr + $tf ) / 2 ) ]
 	#Does some post-processing on the value and returns it.
@@ -213,9 +220,30 @@ proc computeWirePower {solutionCounter reportPath} {
 proc computePower {solutionCounter isPureWire currentSolution currentLoad currentWirePower reportPath} {
 	global setupWirelength
 	global setupCharacterizationUnit
+	global setIOasPorts
+	global bigVerilogs
 
 	set buffCounter 0
 	set totPower 0
+	if { $bigVerilogs == 1 } {
+		#If all the different buffer topologies are in the verilog file, we have to do some manipulations in order to get a circuit with only one buffer.
+		set testOutPin "out"
+		set testSol ""
+		set numOfZeros [expr ( $setupWirelength / $setupCharacterizationUnit ) - 1]
+		set zeroCounter 0
+		while { $zeroCounter < $numOfZeros } {
+			append testSol "0"
+			incr zeroCounter
+		}
+		append testSol "1"
+		#With the testSol, we can get the name of the output por and buffer (ex: out + 001 = out001)
+		append testOutPin $testSol
+		set_load $currentLoad testOutPin
+		set currentWirePower [ get_power "buf_${testSol}_0" switching ${reportPath}]
+	} elseif { $setIOasPorts == 1 } {
+		set_load $currentLoad out1
+		set currentWirePower [ get_power "buf_1_0" switching ${reportPath}]
+	}
 	#If the current solution is pure wire, we only consider the wire power. However, if not, we add the total power of each buffer in the current solution.
 	if { $isPureWire != 1 } {
 		foreach instance $currentSolution {
@@ -324,5 +352,50 @@ proc updateBufferTopologies { currentSolutionTopology instanceBufferType solutio
 		replace_cell [ lindex $currentSolutionTopology $modificationIndex ] [ lindex $bufferList $bufferNameIndex ] 
 		incr bufferCounter
 	}
+	return $currentSolution
+}
+
+proc transformCurrentSolution { solutionCounter } {
+	global setupWirelength
+	global setupCharacterizationUnit
+	global bufferList
+
+	set isPureWire 1
+	set topology [split "$solutionCounter" {}]
+	set currentSolutionTopology {}
+	set currentWirelength 20
+	#Checks the topology (ex: 0 1 2) and transforms it to wire segments and buffers (ex: 20 BUF_X1 BUF_X2)
+	foreach node $topology {
+		if { $node == 0 } {
+			#Wire segment, increments the currentWirelength.
+			set currentWirelength [expr $currentWirelength + $setupCharacterizationUnit ]
+		} else {
+			#Buffer, appends to the currentSolutionTopology the currentWirelength preceding the buffer and the buffer name.
+			append currentSolutionTopology "$currentWirelength [lindex $bufferList [expr $node - 1]] "
+			set currentWirelength 20
+			#If there is a buffer, the solution is no longer pure-wire.
+			set isPureWire 0
+		}
+	}
+	#If there are any left-over wire segments, here we append them to the currentSolutionTopology.
+	if { $currentWirelength > $setupCharacterizationUnit } {
+		set currentWirelength [expr $currentWirelength - $setupCharacterizationUnit ]
+		append currentSolutionTopology "$currentWirelength"
+	}
+
+	return [list $currentSolutionTopology $isPureWire]
+}
+
+proc updateListTopology { binaryTopology instanceBufferType } {
+	global bufferList
+
+	#Transforms [0 1 0 1] and {{1,2} {3,3}} into [0 3 0 4] 
+	set currentSolution $binaryTopology
+	foreach bufferModification $instanceBufferType {
+		set modificationIndex [ lindex $bufferModification 0 ]
+		set bufferNameIndex [ lindex $bufferModification 1 ]
+		lset currentSolution $modificationIndex [ expr $bufferNameIndex + 1 ]
+	}
+	
 	return $currentSolution
 }

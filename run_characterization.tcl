@@ -39,14 +39,25 @@ set initialTime [clock seconds]
 #Saves the current path (path of the run_characterization script).
 set rootPath [file dirname [file normalize [info script]]]
 
+#Gets the flags from the functions_file.
+source ${rootPath}/scripts/functions_file.tcl
+
 #Computes the automatic inputs.
 exec ${rootPath}/inputGeneration/generate_inputs.tcl "${rootPath}" > ${rootPath}/inputGeneration/input_generation_log.txt
 
-#Generates verilog and spef files for a given wirelength and characterization unit. Also creates a log that shows the run-time for each configuration.
-exec ${rootPath}/scripts/create_verilog_spef.tcl "${rootPath}" > ${rootPath}/scripts/verilog_spef_log.txt
+if { $bigVerilogs } {
+	#Generates verilog and spef files for a given wirelength and characterization unit. Also creates a log that shows the run-time for each configuration.
+	exec ${rootPath}/scripts/create_verilog_spef_with_BUFNAMES.tcl "${rootPath}" > ${rootPath}/scripts/verilog_spef_log.txt
 
-#Creates the .LUT files. Also creates a log that shows the run-time for each configuration.
-exec ${rootPath}/OpenSTA/app/sta -no_splash "${rootPath}/scripts/create_lut.tcl" > ${rootPath}/scripts/lut_log.txt
+	#Creates the .LUT files. Also creates a log that shows the run-time for each configuration.
+	exec ${rootPath}/OpenSTA/app/sta -no_splash "${rootPath}/scripts/create_lut_with_BUFNAMES.tcl" > ${rootPath}/scripts/lut_log.txt
+} else {
+	#Generates verilog and spef files for a given wirelength and characterization unit. Also creates a log that shows the run-time for each configuration.
+	exec ${rootPath}/scripts/create_verilog_spef.tcl "${rootPath}" > ${rootPath}/scripts/verilog_spef_log.txt
+
+	#Creates the .LUT files. Also creates a log that shows the run-time for each configuration.
+	exec ${rootPath}/OpenSTA/app/sta -no_splash "${rootPath}/scripts/create_lut.tcl" > ${rootPath}/scripts/lut_log.txt
+}
 
 #Post-processing of the lut file.
 exec ${rootPath}/scripts/lut_post_processing.tcl "${rootPath}" > ${rootPath}/scripts/lut_post_processing_log.txt
