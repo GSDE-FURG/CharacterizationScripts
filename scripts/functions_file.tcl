@@ -31,7 +31,26 @@
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#File containing the implementation for each function used in create_lut and create_verilog_spef
+#File containing the implementation for each function used in characterization. Also contains boolean control variables.
+
+set setIOasPorts 1
+set bigVerilogs 1
+
+proc truncateNum {num} {
+	#Returns a string with any leading 0s removed.
+	while {1} {
+		set stringchar [string index $num end]
+		if { ${stringchar} == "0" } {
+			set num [ string range $num 0 [expr ( [string length $num] - 2 ) ] ]
+		} elseif {${stringchar} == "." } {
+			#If a decimal point is found: remove it and instantly return the string.
+			set num [ string range $num 0 [expr ( [string length $num] - 2 ) ] ]
+			return $num
+		} else {
+			return $num
+		}
+	}
+}
 
 proc dec2bin i {
     #Returns a list that represents a decimal number in binary, e.g. dec2bin 10 => 1 0 1 0 
@@ -45,10 +64,10 @@ proc dec2bin i {
     return $res
 }
 
-proc get_pincapmax {pin_nm} {
+proc get_pincapmax {pin_nm reportPath} {
 	#Uses OpenSTA to generate a report on the pin capacitance. It results in one line that can be in a few different formats depending on the liberty file.
-	report_pin $pin_nm > pin.rpt
-	set pin_rpt	[open "./pin.rpt" r]
+	report_pin $pin_nm > "${reportPath}/pin.rpt"
+	set pin_rpt	[open "${reportPath}/pin.rpt" r]
 	set line [read $pin_rpt]
 
 	#One format is when there is only one capacitance in the liberty file, thus, the 3rd word in the pin report will be a number.
@@ -77,15 +96,15 @@ proc get_pincapmax {pin_nm} {
 
 	#Closes and deletes the pin report file and returns the pin capacitance.
 	close $pin_rpt
-	file delete pin.rpt
+	file delete "${reportPath}/pin.rpt"
 
 	return $pinCap
 }
 
-proc get_power {inst_nm type} {
+proc get_power {inst_nm type reportPath} {
 	#Uses OpenSTA to generate a report on the power of an instance. If results in multiple lines that contain the type of the power (switching, internal, leakage or total) and the numeric values.
-	report_power -instance $inst_nm > pwr.rpt
-	set pwr_rpt	[open "./pwr.rpt" r]
+	report_power -instance $inst_nm > "${reportPath}/pwr.rpt"
+	set pwr_rpt	[open "${reportPath}/pwr.rpt" r]
 	
 	set pwr_list ""
 	#Since there are multiple lines that don't contain the data that we want, we will reject the lines with text and only select the line with the power values, creating a list.
@@ -99,7 +118,7 @@ proc get_power {inst_nm type} {
 	
 	#Closes and deletes the power report file.	
 	close $pwr_rpt
-	file delete pwr.rpt
+	file delete "${reportPath}/pwr.rpt"
 
 	#Return the value based on the parameters used when the function was called. (switching, internal, leakage or total power)
 	if {$type == "internal"} {
@@ -117,9 +136,15 @@ proc get_power {inst_nm type} {
 
 proc computeOutputSlew {inPin outPin currentInputSlew} {
 	global slewInter
+	global setIOasPorts
 	#With the input slew set, we see its effects on the output pin (input of the rightmost FF).
-	set tr	[get_property -object_type pin $outPin actual_rise_transition_max]
-	set tf [get_property -object_type pin $outPin actual_fall_transition_max]
+	if { $setIOasPorts == 1 } {
+		set tr	[get_property -object_type port $outPin actual_rise_transition_max]
+		set tf [get_property -object_type port $outPin actual_fall_transition_max]
+	} else {
+		set tr	[get_property -object_type pin $outPin actual_rise_transition_max]
+		set tf [get_property -object_type pin $outPin actual_fall_transition_max]
+	}
 	#Computes the mean value between the rise and fall times of the output pin.
 	set trans [expr ( ( $tr + $tf ) / 2 ) ]
 	#Does some post-processing on the value and returns it.
@@ -137,7 +162,7 @@ proc computeDelay {outPin} {
 	return $delay
 }
 
-proc computeInputCapacitance {isPureWire currentLoad currentSolution currentWirelength solutionCounter} {
+proc computeInputCapacitance {isPureWire currentLoad currentSolution currentWirelength solutionCounter reportPath} {
 	global capacitancePerUnitLength
 	global baseLoad
 	global initial_cap_interval
@@ -158,7 +183,7 @@ proc computeInputCapacitance {isPureWire currentLoad currentSolution currentWire
 		foreach instance $currentSolution {
 			if { [ string is integer -strict $instance ] == 0 } {
 				#Current segment is not a number (wire), which means it is the buffer that we have to get the pin capacitance from.
-				set inPinCap [ get_pincapmax "buf_${solutionCounter}_0/${bufPinIn}"] 
+				set inPinCap [ get_pincapmax "buf_${solutionCounter}_0/${bufPinIn}" ${reportPath}] 
 				break
 			} else {
 				#Current segment is a number (wire), which represents the wirelength of the leftmost net.
@@ -177,26 +202,53 @@ proc computeInputCapacitance {isPureWire currentLoad currentSolution currentWire
 	return $inCap
 }
 
-proc computeWirePower {solutionCounter} {
+proc computeWirePower {solutionCounter reportPath} {
 	global setupWirelength
 	global setupCharacterizationUnit
-	#Computes the wire power (switching power). For that we use a spef file with load = 0.
-	read_spef "sol_w${setupWirelength}u${setupCharacterizationUnit}/sol_w${setupWirelength}u${setupCharacterizationUnit}l0.spef"
-	set wirePower [ get_power "ffin_${solutionCounter}" switching ]
+	global setIOasPorts
+	
+	if { $setIOasPorts == 1 } {
+		set wirePower [ get_power "buf_1_0" total ${reportPath}]
+	} else {
+		#Computes the wire power (switching power). For that we use a spef file with load = 0.
+		read_spef "${reportPath}/sol_w${setupWirelength}u${setupCharacterizationUnit}/sol_w${setupWirelength}u${setupCharacterizationUnit}l0.spef"
+		set wirePower [ get_power "ffin_${solutionCounter}" switching ${reportPath}]
+	}
 	return $wirePower
 }
 
-proc computePower {solutionCounter isPureWire currentSolution currentLoad currentWirePower} {
+proc computePower {solutionCounter isPureWire currentSolution currentLoad currentWirePower reportPath} {
 	global setupWirelength
 	global setupCharacterizationUnit
+	global setIOasPorts
+	global bigVerilogs
 
 	set buffCounter 0
 	set totPower 0
+	if { $bigVerilogs == 1 } {
+		#If all the different buffer topologies are in the verilog file, we have to do some manipulations in order to get a circuit with only one buffer.
+		set testOutPin "out"
+		set testSol ""
+		set numOfZeros [expr ( $setupWirelength / $setupCharacterizationUnit ) - 1]
+		set zeroCounter 0
+		while { $zeroCounter < $numOfZeros } {
+			append testSol "0"
+			incr zeroCounter
+		}
+		append testSol "1"
+		#With the testSol, we can get the name of the output por and buffer (ex: out + 001 = out001)
+		append testOutPin $testSol
+		set_load $currentLoad testOutPin
+		set currentWirePower [ get_power "buf_${testSol}_0" switching ${reportPath}]
+	} elseif { $setIOasPorts == 1 } {
+		set_load $currentLoad out1
+		set currentWirePower [ get_power "buf_1_0" switching ${reportPath}]
+	}
 	#If the current solution is pure wire, we only consider the wire power. However, if not, we add the total power of each buffer in the current solution.
 	if { $isPureWire != 1 } {
 		foreach instance $currentSolution {
 			if { [ string is integer $instance ] == 0 } {
-				set totalPower [ get_power "buf_${solutionCounter}_${buffCounter}" sum ]
+				set totalPower [ get_power "buf_${solutionCounter}_${buffCounter}" sum ${reportPath}]
 				set totPower [ expr $totPower + $totalPower ]				
 				incr buffCounter
 			}
@@ -300,5 +352,50 @@ proc updateBufferTopologies { currentSolutionTopology instanceBufferType solutio
 		replace_cell [ lindex $currentSolutionTopology $modificationIndex ] [ lindex $bufferList $bufferNameIndex ] 
 		incr bufferCounter
 	}
+	return $currentSolution
+}
+
+proc transformCurrentSolution { solutionCounter } {
+	global setupWirelength
+	global setupCharacterizationUnit
+	global bufferList
+
+	set isPureWire 1
+	set topology [split "$solutionCounter" {}]
+	set currentSolutionTopology {}
+	set currentWirelength 20
+	#Checks the topology (ex: 0 1 2) and transforms it to wire segments and buffers (ex: 20 BUF_X1 BUF_X2)
+	foreach node $topology {
+		if { $node == 0 } {
+			#Wire segment, increments the currentWirelength.
+			set currentWirelength [expr $currentWirelength + $setupCharacterizationUnit ]
+		} else {
+			#Buffer, appends to the currentSolutionTopology the currentWirelength preceding the buffer and the buffer name.
+			append currentSolutionTopology "$currentWirelength [lindex $bufferList [expr $node - 1]] "
+			set currentWirelength 20
+			#If there is a buffer, the solution is no longer pure-wire.
+			set isPureWire 0
+		}
+	}
+	#If there are any left-over wire segments, here we append them to the currentSolutionTopology.
+	if { $currentWirelength > $setupCharacterizationUnit } {
+		set currentWirelength [expr $currentWirelength - $setupCharacterizationUnit ]
+		append currentSolutionTopology "$currentWirelength"
+	}
+
+	return [list $currentSolutionTopology $isPureWire]
+}
+
+proc updateListTopology { binaryTopology instanceBufferType } {
+	global bufferList
+
+	#Transforms [0 1 0 1] and {{1,2} {3,3}} into [0 3 0 4] 
+	set currentSolution $binaryTopology
+	foreach bufferModification $instanceBufferType {
+		set modificationIndex [ lindex $bufferModification 0 ]
+		set bufferNameIndex [ lindex $bufferModification 1 ]
+		lset currentSolution $modificationIndex [ expr $bufferNameIndex + 1 ]
+	}
+	
 	return $currentSolution
 }
