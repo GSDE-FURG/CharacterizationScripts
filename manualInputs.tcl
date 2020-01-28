@@ -1,10 +1,10 @@
-#Full path to liberty file.
-set libpath "fullpath"
+#Full path to liberty file (or leave as is for a test run) .
+set libpath "tests/lut_compare/example1_slow.lib"
 
-#Full path to lef file.
-set lef_file "fullpath"
+#Full path to lef file (or leave as is for a test run) .
+set lef_file "tests/lut_compare/NangateOpenCellLibrary.mod.lef"
 
-#Verilog that uses buffers and flip-flops (created automatically, leave as-is).
+#Verilog that uses buffers and flip-flops (created automatically, leave as is).
 set verilog "buffs_dff.v"
 
 #To calculate the capacitance and resistance per unit length of a wire. Uses the mean from min_layer and max_layer.
