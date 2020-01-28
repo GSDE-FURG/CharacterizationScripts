@@ -47,10 +47,10 @@ exec ${rootPath}/inputGeneration/generate_inputs.tcl "${rootPath}" > ${rootPath}
 
 if { $bigVerilogs } {
 	#Generates verilog and spef files for a given wirelength and characterization unit. Also creates a log that shows the run-time for each configuration.
-	exec ${rootPath}/scripts/create_verilog_spef_with_BUFNAMES.tcl "${rootPath}" > ${rootPath}/scripts/verilog_spef_log.txt
+	exec ${rootPath}/scripts/create_verilog_spef_tom.tcl "${rootPath}" > ${rootPath}/scripts/verilog_spef_log.txt
 
 	#Creates the .LUT files. Also creates a log that shows the run-time for each configuration.
-	exec ${rootPath}/OpenSTA/app/sta -no_splash "${rootPath}/scripts/create_lut_with_BUFNAMES.tcl" > ${rootPath}/scripts/lut_log.txt
+	exec ${rootPath}/OpenSTA/app/sta -no_splash "${rootPath}/scripts/create_lut_tom.tcl" > ${rootPath}/scripts/lut_log.txt
 } else {
 	#Generates verilog and spef files for a given wirelength and characterization unit. Also creates a log that shows the run-time for each configuration.
 	exec ${rootPath}/scripts/create_verilog_spef.tcl "${rootPath}" > ${rootPath}/scripts/verilog_spef_log.txt
