@@ -236,9 +236,9 @@ proc computePower {solutionCounter isPureWire currentSolution currentLoad curren
 			incr zeroCounter
 		}
 		append testSol "1"
-		#With the testSol, we can get the name of the output por and buffer (ex: out + 001 = out001)
+		#With the testSol, we can get the name of the output port and buffer (ex: out + 001 = out001)
 		append testOutPin $testSol
-		set_load $currentLoad testOutPin
+		set_load $currentLoad $testOutPin
 		set currentWirePower [ get_power "buf_${testSol}_0" switching ${reportPath}]
 	} elseif { $setIOasPorts == 1 } {
 		set_load $currentLoad out1
