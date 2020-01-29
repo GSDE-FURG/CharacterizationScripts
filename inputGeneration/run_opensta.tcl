@@ -31,47 +31,28 @@
 # CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
 # OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-source ../manualInputs.tcl
-set verilog "../buffs_dff.v"
 
-proc get_pincapmax {pin_nm} {
-	#Uses OpenSTA to generate a report on the pin capacitance. It results in one line that can be in a few different formats depending on the liberty file.
-	report_pin $pin_nm > pin.rpt
-	set pin_rpt	[open "./pin.rpt" r]
-	set line [read $pin_rpt]
-#puts [lindex $line 1]
-#puts	[get_property [get_lib_cells -of_objects [get_cells -of_objects [lindex $line 1] ]	] full_name]
-	#One format is when there is only one capacitance in the liberty file, thus, the 3rd word in the pin report will be a number.
-	if { [ string is double -strict [lindex $line 3] ] } {	
-		set pinCap [lindex $line 3]
-	} elseif {[string first ":" [lindex $line 3] ] != -1} {	
-		#However, that word could be an interval (string contains ":"). If so, we have to get the upper limit of the pin capacitance.
-		set pinCap [lindex [split [lindex $line 3] ":"] 1]
+proc find_parent_dir { dir } {
+	#Returns the parent directory (one folder above) of the provided path.
+	if { $dir == "." } {
+		return ".."
 	} else {
-		#Another format is when there is a fall capacitance and a rise capacitance. In this case, we will return the higher one of the two.
-		set r_cap [lindex $line 4]
-		set f_cap [lindex $line 6]
-
-		if {[string first ":" r_cap ] != -1} {	
-			#These values can also can be an interval (string contains ":"). 
-			puts "$r_cap $c_cap"
-			set r_cap [lindex [split $r_cap ":"] 1]
-   			set f_cap [lindex [split $f_cap ":"] 1]
-		}
-		
-		if {$r_cap > $f_cap} {
-			set pinCap $r_cap
+		set path [file split $dir]
+		set path_len [llength $path]
+		if { $path_len == 1 } {
+			return "."
 		} else {
-			set pinCap $f_cap
+			set path_len2 [expr $path_len - 2]
+			return [eval file join [lrange $path 0 $path_len2]]
 		}
 	}
-
-	#Closes and deletes the pin report file and returns the pin capacitance.
-	close $pin_rpt
-	file delete pin.rpt
-
-	return $pinCap
 }
+
+set rootPath [file dirname $::argv0 ] 
+set rootPath [find_parent_dir [find_parent_dir $rootPath ] ]
+
+source ${rootPath}/manualInputs.tcl
+source ${rootPath}/scripts/functions_file.tcl
 
 proc getMasters {} {
 #code to return all masters present in the verilog file.
@@ -128,33 +109,31 @@ proc getFFs {} {
 
 read_liberty $libpath
 
-read_verilog $verilog  
+read_verilog "${rootPath}/${verilog}"  
 #verilog with the gates necessary to evaluate pin capacitance
 link_design top
 
 set masters [getMasters]
 set instances [getInstances]
 
-#the function returns the name of FF, input_pin_name, clk_pin_name and output_pin_name as (0, 1, 2 and 3 indexes of ff_data)
-
-
 #read the output file of OPENDB and takes the name of buf_pin
-set f	[open "./outdb.txt" r]
+set f	[open "${rootPath}/inputGeneration/outdb.txt" r]
 	
 gets $f line
 set buf_pin [lindex $line 2]
-
+set ff_pin1 [lindex $line 3]
+set ff_pin2 [lindex $line 4]
 	
 close $f
 
-#gets the capacitance of the pins for all buffers in buf_list and create a list with the capacitances
+#gets the capacitance of the pins for all buffers in bufferList and create a list with the capacitances
 for {set i 0} {$i < [llength $masters]} {incr i} {
 	for {set j 0} {$i < [llength [split $bufferList " "]]} {incr j} {
 		if { [lindex $bufferList $j] == [lindex $masters $i] } {
 			set pin ""
     			append pin [lindex $instances $i] "/" $buf_pin
     			#puts $pin
-    			lappend inPinCap [get_pincapmax $pin]
+    			lappend inPinCap [get_pincapmax $pin $rootPath ]
 			break
 		}
 	}
@@ -164,9 +143,6 @@ for {set i 0} {$i < [llength $masters]} {incr i} {
 set ffextract true
 
 if {!$ffextract} {
-	set ff_pin1 [lindex $line 3]
-	set ff_pin2 [lindex $line 4]
-
 	for {set i 0} {$i < [llength $masters]} {incr i} {
 		if {[lindex $masters $i] == $ff_name } {
 			set ff_name1 [lindex $instances $i]
@@ -174,13 +150,19 @@ if {!$ffextract} {
 			append ff_name1 "/" $ff_pin1
 			append ff_name2 "/" $ff_pin2
 
-			set capff [get_pincapmax $ff_name1]
+			set capff [get_pincapmax $ff_name1 $rootPath ]
 			#puts $capff
-			lappend capff [get_pincapmax $ff_name2]
+			lappend capff [get_pincapmax $ff_name2 $rootPath ]
 			#puts $capff
+
+			#Change ff_name so that it uses the liberty name.
+			set ff_name1 $ff_name
+			set ff_name2 $ff_name
+			append ff_name1 "/" $ff_pin1
+			append ff_name2 "/" $ff_pin2
+
 			break
 		}
-
 	}
 } else {
 	set ff_data [getFFs]
@@ -197,7 +179,7 @@ if {!$ffextract} {
 }
 
 
-set fp [open outsta.txt w]
+set fp [open "${rootPath}/inputGeneration/outsta.txt" w]
 
 puts $fp "$bufferList"
 puts $fp "$inPinCap"
