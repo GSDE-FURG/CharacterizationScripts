@@ -123,8 +123,9 @@ proc computeOutputSlew {inPin outPin currentInputSlew} {
 	global setIOasPorts
 	#With the input slew set, we see its effects on the output pin (input of the rightmost FF).
 	if { $setIOasPorts == 1 } {
-		set tr	[get_property -object_type port $outPin actual_rise_transition_max]
-		set tf [get_property -object_type port $outPin actual_fall_transition_max]
+		set object [sta::get_property_object_type "port" $outPin 1]
+		set tr	[sta::port_property $object "actual_rise_transition_max"]
+		set tf [sta::port_property $object "actual_fall_transition_max"]
 	} else {
 		set tr	[get_property -object_type pin $outPin actual_rise_transition_max]
 		set tf [get_property -object_type pin $outPin actual_fall_transition_max]
@@ -132,6 +133,7 @@ proc computeOutputSlew {inPin outPin currentInputSlew} {
 	#Computes the mean value between the rise and fall times of the output pin.
 	set trans [expr ( ( $tr + $tf ) / 2 ) ]
 	#Does some post-processing on the value and returns it.
+	
 	set outSlew [expr int(( $trans + $slewInter/2)/$slewInter)*$slewInter]
 	return $outSlew
 }
