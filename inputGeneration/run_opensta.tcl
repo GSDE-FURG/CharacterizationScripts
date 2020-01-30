@@ -172,10 +172,16 @@ if {!$ffextract} {
 	append ff_name1 "/" [lindex $ff_data 1]
 	append ff_name2 "/" [lindex $ff_data 2]
 
-	set capff [get_pincapmax $ff_name1]
+	set capff [get_pincapmax $ff_name1 $rootPath]
 	#puts $capff
-	lappend capff [get_pincapmax $ff_name2]
+	lappend capff [get_pincapmax $ff_name2 $rootPath]
 	#puts $capff
+
+	#Change ff_name so that it uses the liberty name.
+	set ff_name1 $ff_name
+	set ff_name2 $ff_name
+	append ff_name1 "/" [lindex $ff_data 1]
+	append ff_name2 "/" [lindex $ff_data 2]
 }
 
 

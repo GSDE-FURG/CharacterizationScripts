@@ -118,6 +118,7 @@ foreach setupWirelength $wirelengthList {
 		set inPin [get_property -object_type port $inputPort full_name]
 	
 		#Gets the solutionCounter from the numbers in the name of the input port. These are used to identify the circuit.
+		if {[string first "test" $inPin ] != -1} {continue}
 		set solutionCounter [string trimleft $inPin "in"]
 
 		#With this, we can set the output port, the solution (ex: 20 BUF_X2) and if the circuit is a pure-wire.

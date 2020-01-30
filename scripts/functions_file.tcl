@@ -66,20 +66,21 @@ proc dec2bin i {
 
 proc get_pincapmax {pin_nm reportPath} {
 	#Uses OpenSTA to generate a report on the pin capacitance. It results in one line that can be in a few different formats depending on the liberty file.
-	report_pin $pin_nm > "${reportPath}/pin.rpt"
-	set pin_rpt	[open "${reportPath}/pin.rpt" r]
-	set line [read $pin_rpt]
+	global sta_report_default_digits
 
-	#One format is when there is only one capacitance in the liberty file, thus, the 3rd word in the pin report will be a number.
-	if { [ string is double -strict [lindex $line 3] ] } {	
-		set pinCap [lindex $line 3]
-	} elseif {[string first ":" [lindex $line 3] ] != -1} {	
+	set libPinNm [[sta::get_pin_warn "pin" $pin_nm] liberty_port]
+	set line [sta::port_capacitance_str $libPinNm $sta_report_default_digits]
+	
+	#One format is when there is only one capacitance in the liberty file, thus, the 1st word in the pin report will be a number.
+	if { [ string is double -strict [lindex $line 0] ] } {	
+		set pinCap [lindex $line 0]
+	} elseif {[string first ":" [lindex $line 0] ] != -1} {	
 		#However, that word could be an interval (string contains ":"). If so, we have to get the upper limit of the pin capacitance.
-		set pinCap [lindex [split [lindex $line 3] ":"] 1]
+		set pinCap [lindex [split [lindex $line 0] ":"] 1]
 	} else {
 		#Another format is when there is a fall capacitance and a rise capacitance. In this case, we will return the higher one of the two.
-		set r_cap [lindex $line 4]
-		set f_cap [lindex $line 6]
+		set r_cap [lindex $line 1]
+		set f_cap [lindex $line 3]
 
 		if {[string first ":" $r_cap ] != -1} {	
 			#These values can also can be an interval (string contains ":"). 
@@ -94,31 +95,14 @@ proc get_pincapmax {pin_nm reportPath} {
 		}
 	}
 
-	#Closes and deletes the pin report file and returns the pin capacitance.
-	close $pin_rpt
-	file delete "${reportPath}/pin.rpt"
-
 	return $pinCap
 }
 
 proc get_power {inst_nm type reportPath} {
-	#Uses OpenSTA to generate a report on the power of an instance. If results in multiple lines that contain the type of the power (switching, internal, leakage or total) and the numeric values.
-	report_power -instance $inst_nm > "${reportPath}/pwr.rpt"
-	set pwr_rpt	[open "${reportPath}/pwr.rpt" r]
-	
-	set pwr_list ""
-	#Since there are multiple lines that don't contain the data that we want, we will reject the lines with text and only select the line with the power values, creating a list.
-	while {[gets $pwr_rpt line] >= 0} { 
-		if {[regexp -nocase [ subst -nocommands -nobackslashes {(.*)\s+(.*)\s+(.*)\s+(.*)\s+$inst_nm} ] $line]} {
-			set wordlist [regexp -inline -all -- {\S+} $line]
-			set pwr_list [split $wordlist " "]
-		}
-	
-	}
-	
-	#Closes and deletes the power report file.	
-	close $pwr_rpt
-	file delete "${reportPath}/pwr.rpt"
+	#Returns the power for a specific instance using OpenSTA functions.
+	set corner [sta::parse_corner keys]
+	set inst_nm [sta::get_instances_error "-instances" $inst_nm]
+	set pwr_list [sta::instance_power $inst_nm $corner]
 
 	#Return the value based on the parameters used when the function was called. (switching, internal, leakage or total power)
 	if {$type == "internal"} {
@@ -153,13 +137,17 @@ proc computeOutputSlew {inPin outPin currentInputSlew} {
 }
 
 proc computeDelay {outPin} {
-	#Uses OpenSTA to get the start and end points (objects) of the current circuit.
-	set points [get_property [find_timing_paths -through $outPin] points] 
-	set start  [lindex $points 0]
-	set end  [lindex $points end]
-	#With these we can get each arrival time and compute the delay between them. We truncate the result to 3 decimal places and return it.
-	set delay [format "%.3f" [expr {[get_property $end arrival] - [get_property $start arrival]}]]
-	return $delay
+	#Uses OpenSTA to get the arrival time of a specific pin.
+	global sta_report_default_digits
+	set sigVertices [[sta::get_port_pin_error "pin" $outPin] vertices]
+	set clockSig [[sta::clock_iterator] next]
+	set riseTimes [$sigVertices "arrivals_clk_delays" rise $clockSig "rise" $sta_report_default_digits] 
+	set riseValue [lindex $riseTimes 0]
+	set rise2 [lindex $riseTimes 1]
+	if {$rise2 > $riseValue} {
+		set riseValue $rise2
+	}
+	return [format "%.3f" $riseValue ]
 }
 
 proc computeInputCapacitance {isPureWire currentLoad currentSolution currentWirelength solutionCounter reportPath} {
@@ -208,7 +196,7 @@ proc computeWirePower {solutionCounter reportPath} {
 	global setIOasPorts
 	
 	if { $setIOasPorts == 1 } {
-		set wirePower [ get_power "buf_1_0" total ${reportPath}]
+		return 0
 	} else {
 		#Computes the wire power (switching power). For that we use a spef file with load = 0.
 		read_spef "${reportPath}/sol_w${setupWirelength}u${setupCharacterizationUnit}/sol_w${setupWirelength}u${setupCharacterizationUnit}l0.spef"
@@ -226,20 +214,8 @@ proc computePower {solutionCounter isPureWire currentSolution currentLoad curren
 	set buffCounter 0
 	set totPower 0
 	if { $bigVerilogs == 1 } {
-		#If all the different buffer topologies are in the verilog file, we have to do some manipulations in order to get a circuit with only one buffer.
-		set testOutPin "out"
-		set testSol ""
-		set numOfZeros [expr ( $setupWirelength / $setupCharacterizationUnit ) - 1]
-		set zeroCounter 0
-		while { $zeroCounter < $numOfZeros } {
-			append testSol "0"
-			incr zeroCounter
-		}
-		append testSol "1"
-		#With the testSol, we can get the name of the output port and buffer (ex: out + 001 = out001)
-		append testOutPin $testSol
-		set_load $currentLoad $testOutPin
-		set currentWirePower [ get_power "buf_${testSol}_0" switching ${reportPath}]
+		set_load $currentLoad "testout"
+		set currentWirePower [ get_power "testbuf" switching ${reportPath}]
 	} elseif { $setIOasPorts == 1 } {
 		set_load $currentLoad out1
 		set currentWirePower [ get_power "buf_1_0" switching ${reportPath}]

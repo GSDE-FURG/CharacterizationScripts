@@ -187,6 +187,48 @@ foreach setupWirelength $wirelengthList {
 		
 		#Move to the next solution (another bitset that represents a collection of buffers).
 	}
+	if {1} {
+		#Segment for a test net. Used as power for pure-wire solutions.
+		append solutionText "\tassign testnet_1 = testin ;\n\t"
+		lappend inputVector "testin" 
+		append moduleText "testin, "
+		set currentFirstPin "testin"
+		set currentNetName "testnet_1"
+		#Since wireCounter was created above, insert the first wire in the wireVector.
+		lappend wireVector $currentNetName
+
+		#Definition for the BUF name is buf_solutionCounter_wireCounter
+		append solutionText "[lindex $bufferList 0] testbuf"
+		append solutionText "( .${bufPinIn}(testnet_1"
+
+		#Define the name of the last pin and save the information of the net for future computations.
+		set currentLastPin "testbuf:${bufPinIn}"
+		set currentNet "${currentNetName} ${currentFirstPin} ${currentLastPin} ${setupWirelength} ${bufPinInCapacitance}"
+		lappend createdNets $currentNet	
+
+		#Since a new wire was created, we need to define a new first pin.
+		set currentFirstPin "testbuf:${bufPinOut}"
+
+		#Since wireCounter was changed, wireVector has to be updated with the new wire.
+		incr wireCounter
+		lappend wireVector "testnet_2"
+		
+		#Finishes a buffer in the verilog file. Updating the output pin of the current buffer with the new wire.
+		append solutionText "), .${bufPinOut}(testnet_2) );\n\t"
+
+		#With the new data above, we can save the name of the new net.
+		set currentNetName "testnet_2"
+
+		#Define the name of the last pin and saves the information of the net for future computations.
+		set currentLastPin "testout"
+		set currentNet "${currentNetName} ${currentFirstPin} ${currentLastPin} 0 0"
+		lappend createdNets $currentNet	
+
+		#In this step, we add the data for the last port of the solution.
+		append solutionText "assign testout = ${currentNetName} ;\n\n"
+		lappend outputVector "testout" 
+		append moduleText "testout, "
+	}
 		
 	#Creates the definition of the wires for the verilog file.
 	set wireText "\n\twire "
