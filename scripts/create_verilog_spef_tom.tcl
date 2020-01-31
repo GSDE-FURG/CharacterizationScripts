@@ -119,115 +119,124 @@ foreach setupWirelength $wirelengthList {
 
 	#Iterates through each solution. Each has one input FF and a output FF. This segment also defines the wires and creates the text data.
 	foreach topology $topologyList {
-		
-		#solutionCounter is what is used to define each different circuit. It is a number that represents the current topology (ex: [1 0 3] -> 103)
-		set solutionCounter [string map {" " ""} [join $topology " "] ]
+		foreach loadValue $loadList {
+			if { $loadValue == 0 } {continue}
+			set loadValue [ string map {"." "d"} $loadValue ]
+			foreach slewValue $inputSlewList {
+				set slewValue [ string map {"." "d"} $slewValue ]
+				#solutionCounter is what is used to define each different circuit. It is a number that represents the current topology (ex: [1 0 3] -> 103)
+				set solutionCounter [string map {" " ""} [join $topology " "] ]
 
-		#wireCounter defines what wire is being created. For each new buffer, a new wire is created and updated in the wireVector.
-		set wireCounter 0
+				#wireCounter defines what wire is being created. For each new buffer, a new wire is created and updated in the wireVector.
+				set wireCounter 0
 
-		append solutionText "\tassign net_${solutionCounter}_${wireCounter} = in${solutionCounter} ;\n\t"
-		lappend inputVector "in${solutionCounter}" 
-		append moduleText "in${solutionCounter}, "
-		set currentFirstPin "in${solutionCounter}"
-		set currentNetName "net_${solutionCounter}_${wireCounter}"
+				append solutionText "\tassign net_${solutionCounter}_${loadValue}_${slewValue}_${wireCounter} = in${solutionCounter}_${loadValue}_${slewValue} ;\n\t"
+				lappend inputVector "in${solutionCounter}_${loadValue}_${slewValue}" 
+				append moduleText "in${solutionCounter}_${loadValue}_${slewValue}, "
+				set currentFirstPin "in${solutionCounter}_${loadValue}_${slewValue}"
+				set currentNetName "net_${solutionCounter}_${loadValue}_${slewValue}_${wireCounter}"
 
-		#Since wireCounter was created above, insert the first wire in the wireVector.
-		lappend wireVector $currentNetName
+				#Since wireCounter was created above, insert the first wire in the wireVector.
+				lappend wireVector $currentNetName
 
-		#Iterates through the current topology (i.e. a bit set). When a node is != 0, a new buffer is created (and, consequently, a new wire).
-		set nodesWithoutBuf 0
-		foreach node $topology {
-			if { $node != 0 } {
-				#Creates a buffer in the verilog file.
+				#Iterates through the current topology (i.e. a bit set). When a node is != 0, a new buffer is created (and, consequently, a new wire).
+				set nodesWithoutBuf 0
+				foreach node $topology {
+					if { $node != 0 } {
+						#Creates a buffer in the verilog file.
 
-				#We also need to increment this counter since, technically, a wire segment did exist between the first pin and the buffer.
-				incr nodesWithoutBuf
+						#We also need to increment this counter since, technically, a wire segment did exist between the first pin and the buffer.
+						incr nodesWithoutBuf
 
-				#Definition for the BUF name is buf_solutionCounter_wireCounter
-				append solutionText "[lindex $bufferList [expr $node - 1]] buf_${solutionCounter}_${wireCounter}"
-				append solutionText "( .${bufPinIn}(net_${solutionCounter}_${wireCounter}"
+						#Definition for the BUF name is buf_solutionCounter_wireCounter
+						append solutionText "[lindex $bufferList [expr $node - 1]] buf_${solutionCounter}_${loadValue}_${slewValue}_${wireCounter}"
+						append solutionText "( .${bufPinIn}(net_${solutionCounter}_${loadValue}_${slewValue}_${wireCounter}"
 
-				#Define the name of the last pin and save the information of the net for future computations.
-				set currentLastPin "buf_${solutionCounter}_${wireCounter}:${bufPinIn}"
-				set currentNet "${currentNetName} ${currentFirstPin} ${currentLastPin} [ expr ($nodesWithoutBuf * $setupCharacterizationUnit) ] ${bufPinInCapacitance}"
+						#Define the name of the last pin and save the information of the net for future computations.
+						set currentLastPin "buf_${solutionCounter}_${loadValue}_${slewValue}_${wireCounter}:${bufPinIn}"
+						set currentNet "${currentNetName} ${currentFirstPin} ${currentLastPin} [ expr ($nodesWithoutBuf * $setupCharacterizationUnit) ] ${bufPinInCapacitance}"
+						lappend createdNets $currentNet	
+
+						#Since a new wire was created, we need to define a new first pin.
+						set currentFirstPin "buf_${solutionCounter}_${loadValue}_${slewValue}_${wireCounter}:${bufPinOut}"
+
+						#Since wireCounter was changed, wireVector has to be updated with the new wire.
+						incr wireCounter
+						lappend wireVector "net_${solutionCounter}_${loadValue}_${slewValue}_${wireCounter}"
+						
+						#Finishes a buffer in the verilog file. Updating the output pin of the current buffer with the new wire.
+						append solutionText "), .${bufPinOut}(net_${solutionCounter}_${loadValue}_${slewValue}_${wireCounter}) );\n\t"
+
+						#With the new data above, we can save the name of the new net.
+						set currentNetName "net_${solutionCounter}_${loadValue}_${slewValue}_${wireCounter}"
+
+						#Clears the nodesWithoutBuf counter, since the wirelength for this new segment is still 0.
+						set nodesWithoutBuf 0
+					} else {
+
+						#Pure wire segment
+						incr nodesWithoutBuf
+					}
+				} 
+				
+				#Define the name of the last pin and saves the information of the net for future computations.
+				set currentLastPin "out${solutionCounter}_${loadValue}_${slewValue}"
+				set currentNet "${currentNetName} ${currentFirstPin} ${currentLastPin} [ expr ($nodesWithoutBuf * $setupCharacterizationUnit) ] 0"
 				lappend createdNets $currentNet	
 
-				#Since a new wire was created, we need to define a new first pin.
-				set currentFirstPin "buf_${solutionCounter}_${wireCounter}:${bufPinOut}"
-
-				#Since wireCounter was changed, wireVector has to be updated with the new wire.
-				incr wireCounter
-				lappend wireVector "net_${solutionCounter}_${wireCounter}"
+				#In this step, we add the data for the last port of the solution.
+				append solutionText "assign out${solutionCounter}_${loadValue}_${slewValue} = ${currentNetName} ;\n\n"
+				lappend outputVector "out${solutionCounter}_${loadValue}_${slewValue}" 
+				append moduleText "out${solutionCounter}_${loadValue}_${slewValue}, "
 				
-				#Finishes a buffer in the verilog file. Updating the output pin of the current buffer with the new wire.
-				append solutionText "), .${bufPinOut}(net_${solutionCounter}_${wireCounter}) );\n\t"
-
-				#With the new data above, we can save the name of the new net.
-				set currentNetName "net_${solutionCounter}_${wireCounter}"
-
-				#Clears the nodesWithoutBuf counter, since the wirelength for this new segment is still 0.
-				set nodesWithoutBuf 0
-			} else {
-
-				#Pure wire segment
-				incr nodesWithoutBuf
+				#Move to the next solution (another bitset that represents a collection of buffers).
 			}
-		} 
-		
-		#Define the name of the last pin and saves the information of the net for future computations.
-		set currentLastPin "out${solutionCounter}"
-		set currentNet "${currentNetName} ${currentFirstPin} ${currentLastPin} [ expr ($nodesWithoutBuf * $setupCharacterizationUnit) ] 0"
-		lappend createdNets $currentNet	
-
-		#In this step, we add the data for the last port of the solution.
-		append solutionText "assign out${solutionCounter} = ${currentNetName} ;\n\n"
-		lappend outputVector "out${solutionCounter}" 
-		append moduleText "out${solutionCounter}, "
-		
-		#Move to the next solution (another bitset that represents a collection of buffers).
+		}
 	}
-	if {1} {
+
+	foreach loadValue $loadList {
+		if { $loadValue == 0 } {continue}
+		set loadValue [ string map {"." "d"} $loadValue ]
 		#Segment for a test net. Used as power for pure-wire solutions.
-		append solutionText "\tassign testnet_1 = testin ;\n\t"
-		lappend inputVector "testin" 
-		append moduleText "testin, "
-		set currentFirstPin "testin"
-		set currentNetName "testnet_1"
+		append solutionText "\tassign testnet_1_${loadValue} = testin_${loadValue} ;\n\t"
+		lappend inputVector "testin_${loadValue}" 
+		append moduleText "testin_${loadValue}, "
+		set currentFirstPin "testin_${loadValue}"
+		set currentNetName "testnet_1_${loadValue}"
 		#Since wireCounter was created above, insert the first wire in the wireVector.
 		lappend wireVector $currentNetName
 
 		#Definition for the BUF name is buf_solutionCounter_wireCounter
-		append solutionText "[lindex $bufferList 0] testbuf"
-		append solutionText "( .${bufPinIn}(testnet_1"
+		append solutionText "[lindex $bufferList 0] testbuf_${loadValue}"
+		append solutionText "( .${bufPinIn}(testnet_1_${loadValue}"
 
 		#Define the name of the last pin and save the information of the net for future computations.
-		set currentLastPin "testbuf:${bufPinIn}"
+		set currentLastPin "testbuf_${loadValue}:${bufPinIn}"
 		set currentNet "${currentNetName} ${currentFirstPin} ${currentLastPin} ${setupWirelength} ${bufPinInCapacitance}"
 		lappend createdNets $currentNet	
 
 		#Since a new wire was created, we need to define a new first pin.
-		set currentFirstPin "testbuf:${bufPinOut}"
+		set currentFirstPin "testbuf_${loadValue}:${bufPinOut}"
 
 		#Since wireCounter was changed, wireVector has to be updated with the new wire.
 		incr wireCounter
-		lappend wireVector "testnet_2"
+		lappend wireVector "testnet_2_${loadValue}"
 		
 		#Finishes a buffer in the verilog file. Updating the output pin of the current buffer with the new wire.
-		append solutionText "), .${bufPinOut}(testnet_2) );\n\t"
+		append solutionText "), .${bufPinOut}(testnet_2_${loadValue}) );\n\t"
 
 		#With the new data above, we can save the name of the new net.
-		set currentNetName "testnet_2"
+		set currentNetName "testnet_2_${loadValue}"
 
 		#Define the name of the last pin and saves the information of the net for future computations.
-		set currentLastPin "testout"
+		set currentLastPin "testout_${loadValue}"
 		set currentNet "${currentNetName} ${currentFirstPin} ${currentLastPin} 0 0"
 		lappend createdNets $currentNet	
 
 		#In this step, we add the data for the last port of the solution.
-		append solutionText "assign testout = ${currentNetName} ;\n\n"
-		lappend outputVector "testout" 
-		append moduleText "testout, "
+		append solutionText "assign testout_${loadValue} = ${currentNetName} ;\n\n"
+		lappend outputVector "testout_${loadValue}" 
+		append moduleText "testout_${loadValue}, "
 	}
 		
 	#Creates the definition of the wires for the verilog file.

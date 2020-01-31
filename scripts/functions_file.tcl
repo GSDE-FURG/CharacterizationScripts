@@ -212,12 +212,12 @@ proc computePower {solutionCounter isPureWire currentSolution currentLoad curren
 	global setupCharacterizationUnit
 	global setIOasPorts
 	global bigVerilogs
+	global inputSlewList
 
 	set buffCounter 0
 	set totPower 0
 	if { $bigVerilogs == 1 } {
-		set_load $currentLoad "testout"
-		set currentWirePower [ get_power "testbuf" switching ${reportPath}]
+		set currentWirePower [ get_power "testbuf_[string map {. d} ${currentLoad}]" switching ${reportPath}]
 	} elseif { $setIOasPorts == 1 } {
 		set_load $currentLoad out1
 		set currentWirePower [ get_power "buf_1_0" switching ${reportPath}]

@@ -84,7 +84,7 @@ foreach setupWirelength $wirelengthList {
 
 	#Starts a timer for the current computation.
 	puts "Extracting LUT for: Wirelength ${setupWirelength} , Characterization Unit ${setupCharacterizationUnit}."
-	set initialTime [clock seconds]	
+	set initialTime [clock microseconds]	
 
 	#Reads the verilog file, elaborates the design.
 	read_verilog "${rootPath}/scripts/sol_w${setupWirelength}u${setupCharacterizationUnit}/sol_w${setupWirelength}u${setupCharacterizationUnit}.v"
@@ -112,18 +112,63 @@ foreach setupWirelength $wirelengthList {
 
 	#For each parallel circuit in the verilog file, we have one input port and one output port. Thus, we can iterate over all input ports to get each specific circuit.
 	set solutionsToTest [all_inputs]
+	set slewDict {}
+	set loadDict {}
 
+	puts "Time for seg: setting load and slews. Start"
+	set tempTime [clock microseconds]
+	set allSolutions ""
+	set allOut ""
+#Uses OpenSTA in order to set a slew on the input port.
 	foreach inputPort $solutionsToTest {
 		#Transform the name of the port into a name we can use. Port_xxyy -> in00
 		set inPin [get_property -object_type port $inputPort full_name]
-	
-		#Gets the solutionCounter from the numbers in the name of the input port. These are used to identify the circuit.
-		if {[string first "test" $inPin ] != -1} {continue}
+		if {[string first "test" $inPin ] != -1} {
+			set currentLoad [string trimleft $inPin "testin_"]
+			set outPin "testout_${currentLoad}"
+			dict lappend loadDict $currentLoad "$outPin"
+			continue
+		}
 		set solutionCounter [string trimleft $inPin "in"]
-
-		#With this, we can set the output port, the solution (ex: 20 BUF_X2) and if the circuit is a pure-wire.
+		set solutionList [ string map {"d" "."} $solutionCounter ]
+		set solutionList [split $solutionList "_"]
+		set solutionNumber [lindex $solutionList 0]
+		if {[lsearch -exact $allSolutions $solutionNumber ] < 0 } {lappend allSolutions $solutionNumber }
+		set currentLoad [lindex $solutionList 1]
+		set currentInputSlew [lindex $solutionList 2]
 		set outPin "out${solutionCounter}"
-		set solutionList [ transformCurrentSolution $solutionCounter ]
+		lappend allOut "out${solutionCounter}"
+
+		dict lappend slewDict $currentInputSlew "$inPin"
+		dict lappend loadDict $currentLoad "$outPin"
+	}
+	set tempTime [ expr ( [clock microseconds] - $tempTime ) ]
+	puts "Time for seg: tcl manipulations - setting load and slews. Runtime = $tempTime microseconds."
+	set tempTime [clock microseconds]
+	dict for {currentInputSlew pinList} $slewDict {
+		set_assigned_transition -rise $currentInputSlew $pinList
+		set_assigned_transition -fall $currentInputSlew $pinList
+	}
+	dict for {currentLoad pinList} $loadDict {
+		set_load $currentLoad $pinList
+	}
+
+	#report_checks
+	
+	set tempTime [ expr ( [clock microseconds] - $tempTime ) ]
+	puts "Time for seg: setting load and slews. Runtime = $tempTime microseconds."
+
+	set solutiontimelist ""
+	set inputcaptimelist ""
+	set powertimelist ""
+	set delaytimelist ""
+	set outputslewtimelist ""
+
+	foreach solutionNumber $allSolutions {
+
+		set tempTime [clock microseconds]
+
+		set solutionList [ transformCurrentSolution $solutionNumber ]
 		set currentSolution [ lindex $solutionList 0 ]
 		set isPureWire [ lindex $solutionList 1 ]
 
@@ -135,32 +180,46 @@ foreach setupWirelength $wirelengthList {
 		set solutionText [ string trim $solutionText "," ]
 
 		set lineIndex 0
+		set tempTime [ expr ( [clock microseconds] - $tempTime ) ]
+		lappend solutiontimelist $tempTime
 
-		#Iterates through each inputslew and load.
 		foreach currentLoad $loadList {
 			#Load = 0 is only used to create the spef files and to compute the wire power.
 			if { $currentLoad == 0 } { continue }
-
-			set_load $currentLoad $outPin
-			
+		
+			set tempTime [clock microseconds]				
 			#Computes the input capacitance for the current configuration.
-			set currentInputCapacitance [ computeInputCapacitance $isPureWire $currentLoad $currentSolution $setupWirelength $solutionCounter "${rootPath}/scripts"]
+			set loadText [ string map {"." "d"} $currentLoad ]
+			set slewText [ string map {"." "d"} [lindex $inputSlewList 0 ] ]
+			
+			set currentInputCapacitance [ computeInputCapacitance $isPureWire $currentLoad $currentSolution $setupWirelength "${solutionNumber}_${loadText}_${slewText}" "${rootPath}/scripts"]
+			set tempTime [ expr ( [clock microseconds] - $tempTime ) ]
+			lappend inputcaptimelist $tempTime
 
 			foreach currentInputSlew $inputSlewList {
-				
-				#Uses OpenSTA in order to set a slew on the input port.
-				set_assigned_transition -rise $currentInputSlew $inPin
-				set_assigned_transition -fall $currentInputSlew $inPin
+				set slewText [ string map {"." "d"} $currentInputSlew ]
 
+				set solutionCounter "${solutionNumber}_${loadText}_${slewText}"		
+				set inPin "in${solutionCounter}"
+				set outPin "out${solutionCounter}"
 				#Computes the outputSlew for the current configuration, also tests if it is higher than a fixed value (2*maxSlew), and, if it is, it skips the current inputSLew value.
+				set tempTime [clock microseconds]	
 				set currentOutputSlew [ computeOutputSlew $inPin $outPin $currentInputSlew ]
+				set tempTime [ expr ( [clock microseconds] - $tempTime ) ]
+				lappend outputslewtimelist $tempTime
 				if { $currentOutputSlew > [ expr 2 * $maxSlew ] } { continue }
 
+				set tempTime [clock microseconds]
 				#Computes the delay for the current configuration.
 				set currentDelay [ computeDelay $outPin ]
-				
+				set tempTime [ expr ( [clock microseconds] - $tempTime ) ]
+				lappend delaytimelist $tempTime
+
+				set tempTime [clock microseconds]
 				#Computes the power for the current configuration. 
 				set currentPower [ computePower $solutionCounter $isPureWire $currentSolution $currentLoad 0 "${rootPath}/scripts"]
+				set tempTime [ expr ( [clock microseconds] - $tempTime ) ]
+				lappend powertimelist $tempTime
 
 				#Creates a key that represents the current solution. Composed of load, delay, wirelength, outputslew, inputslew and inputcap.
 				set solutionKey "$currentLoad-$currentDelay-$setupWirelength-$currentOutputSlew-$currentInputSlew-$currentInputCapacitance"
@@ -190,11 +249,9 @@ foreach setupWirelength $wirelengthList {
 					#Updates outputTextData with the new line. Also increments the lineIndex.
 					dict lappend outputTextData $solutionText "$currentPower $currentLoad $currentDelay $setupWirelength $currentOutputSlew $currentInputSlew $currentInputCapacitance $solutionText "
 					incr lineIndex
-					
 				}
-			}
-		}
-		
+			}	
+		}		
 	}
 
 	#Opens the new LUT file.
@@ -224,8 +281,13 @@ foreach setupWirelength $wirelengthList {
 	close $lutFile
 
 	#Ends the timer for the current computation.
-	set finalTime [ expr ( [clock seconds] - $initialTime ) ]
-	puts "LUT extracted for: Wirelength ${setupWirelength} , Characterization Unit ${setupCharacterizationUnit}. Runtime = $finalTime seconds."
+	set finalTime [ expr ( [clock microseconds] - $initialTime ) ]
+	puts "LUT extracted for: Wirelength ${setupWirelength} , Characterization Unit ${setupCharacterizationUnit}. Runtime = $finalTime microseconds."
+	puts "sol computation. Total [::tcl::mathop::+ {*}$solutiontimelist]. Mean [expr ( [::tcl::mathop::+ {*}$solutiontimelist] / [llength $solutiontimelist] ) ] Number [llength $solutiontimelist]"
+	puts "inputcap computation. Total [::tcl::mathop::+ {*}$inputcaptimelist]. Mean [expr ( [::tcl::mathop::+ {*}$inputcaptimelist] / [llength $inputcaptimelist] ) ] Number [llength $inputcaptimelist]"
+	puts "power computation. Total [::tcl::mathop::+ {*}$powertimelist]. Mean [expr ( [::tcl::mathop::+ {*}$powertimelist] / [llength $powertimelist] ) ] Number [llength $powertimelist]"
+	puts "delay computation. Total [::tcl::mathop::+ {*}$delaytimelist]. Mean [expr ( [::tcl::mathop::+ {*}$delaytimelist] / [llength $delaytimelist] ) ] Number [llength $delaytimelist]"
+	puts "outputslew computation. Total [::tcl::mathop::+ {*}$outputslewtimelist]. Mean [expr ( [::tcl::mathop::+ {*}$outputslewtimelist] / [llength $outputslewtimelist] ) ] Number [llength $outputslewtimelist]"
 }	
 
 #Leaves OpenSTA.

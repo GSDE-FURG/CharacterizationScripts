@@ -31,7 +31,7 @@ set final_cap_interval 0.005
 set outLoadNum 34
 
 #Wirelengths to be tested. Separated by whitespace.
-set wirelengthList "20"
+set wirelengthList "40"
 
 #Characterization unit to be used.
 set setupCharacterizationUnit 20
